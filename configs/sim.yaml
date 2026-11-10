@@ -1,0 +1,7 @@
+#Config file for the simulation environment.
+
+world:
+  gravity_mps2: 9.81 # derived from jump height and time to peak
+  sim_hz: 60 # fixed timestep (1/60)
+  arena_width_m: 12.0
+  floor_y_m: 0.0

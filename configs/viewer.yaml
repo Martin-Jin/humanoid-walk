@@ -1,0 +1,9 @@
+# Viewer-only display, and audio settings.
+
+rendering:
+  screen_width: 1280
+  screen_height: 720
+  # calculate pixels per meter based on the arena width and screen width
+  # For example, if the arena is 12.8 meters wide and the screen is 1280 pixels wide, then pixels_per_meter = 1280 / 12.8 = 100
+  pixels_per_meter: 100
+  floor_y_px: 650
