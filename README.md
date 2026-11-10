@@ -44,3 +44,4 @@ See the [setup guide](docs/setup.md). It covers the CPU and NVIDIA CUDA installs
 - [docs/training-process.md](docs/training-process.md) — training loop and PPO.
 - [docs/controllers.md](docs/controllers.md) — classical control and the shared interface.
 - [docs/modules-reference.md](docs/modules-reference.md) — every module and folder.
+- [docs/resources.md](docs/resources.md) — papers, courses and docs for learning each part.
