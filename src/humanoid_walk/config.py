@@ -1,16 +1,15 @@
 """Load the project's configuration from the YAML files in ``configs/``."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import yaml
 
 from humanoid_walk.utils.paths import CONFIGS_DIR
 
 
-# frozen dataclasses for each config section, built from ``load_yaml``.
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class WorldConfig:
     """Configuration for the simulation environment."""
 
@@ -19,8 +18,12 @@ class WorldConfig:
     arena_width_m: float
     floor_y_m: float
 
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> Self:
+        return cls(**raw)
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, slots=True)
 class JointConfig:
     """Configuration for a single joint of the humanoid agent."""
 
@@ -30,12 +33,16 @@ class JointConfig:
     max_torque: float
     friction: float
 
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> Self:
+        return cls(**{**raw, "limits": tuple(raw["limits"])})
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, slots=True)
 class HumanoidConfig:
     """Configuration for the humanoid agent."""
 
-    joint_configs: list[JointConfig]
+    joint_configs: tuple[JointConfig, ...]
     mass_kg: float
     height_m: float
     leg_length_m: float
@@ -48,8 +55,13 @@ class HumanoidConfig:
     torso_length_m: float
     torso_width_m: float
 
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> Self:
+        joints = tuple(JointConfig.from_dict(jc) for jc in raw["joint_configs"])
+        return cls(**{**raw, "joint_configs": joints})
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, slots=True)
 class RenderingConfig:
     """Configuration for rendering and display."""
 
@@ -58,57 +70,18 @@ class RenderingConfig:
     pixels_per_meter: float
     floor_y_px: int
 
-
-@dataclass(frozen=True)
-class ViewerConfig:
-    """Configuration for the viewer application."""
-
-    rendering: RenderingConfig
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> Self:
+        return cls(**raw)
 
 
-# Config builders
-def build_viewer_config(raw: dict[str, Any]) -> ViewerConfig:
-    """Build and return the viewer configuration."""
-    return ViewerConfig(rendering=RenderingConfig(**raw.get("rendering", {})))
-
-
-def build_world_config(raw: dict[str, Any]) -> WorldConfig:
-    """Build and return the simulation configuration."""
-    return WorldConfig(**raw)
-
-
-def build_humanoid_config(raw: dict[str, Any]) -> HumanoidConfig:
-    """Build and return the humanoid configuration."""
-    return HumanoidConfig(
-        **{
-            **raw,
-            "joint_configs": [JointConfig(**jc) for jc in raw.get("joint_configs", [])],
-        }
-    )
-
-
-def build_game_config(world_raw: dict[str, Any], humanoid_raw: dict[str, Any]) -> GameConfig:
-    """Build and return the game configuration."""
-    return GameConfig(
-        world=build_world_config(world_raw),
-        humanoid=build_humanoid_config(humanoid_raw),
-    )
-
-
-@dataclass(frozen=True)
-class GameConfig:
-    """Configuration for the game."""
-
-    world: WorldConfig
-    humanoid: HumanoidConfig
-
-
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Config:
     """Configuration for the humanoid walk project."""
 
-    game: GameConfig
-    viewer: ViewerConfig
+    world: WorldConfig
+    humanoid: HumanoidConfig
+    rendering: RenderingConfig
 
 
 def load_yaml(name: str, directory: Path = CONFIGS_DIR) -> dict[str, Any]:
@@ -121,19 +94,8 @@ def load_yaml(name: str, directory: Path = CONFIGS_DIR) -> dict[str, Any]:
 
 
 def load_config() -> Config:
-    """Load and return the project's configuration."""
-    sim_config = load_yaml("sim.yaml")
-    humanoid_config = load_yaml("humanoid.yaml")
-    viewer_config = load_yaml("viewer.yaml")
-    # Validate that config exists.
-    if "world" not in sim_config:
-        raise ValueError("sim.yaml must contain a 'world' section.")
-    if "humanoid" not in humanoid_config:
-        raise ValueError("humanoid.yaml must contain a 'humanoid' section.")
-    if "rendering" not in viewer_config:
-        raise ValueError("viewer.yaml must contain a 'rendering' section.")
-
     return Config(
-        game=build_game_config(sim_config["world"], humanoid_config["humanoid"]),
-        viewer=build_viewer_config(viewer_config),
+        world=WorldConfig.from_dict(load_yaml("sim.yaml")["world"]),
+        humanoid=HumanoidConfig.from_dict(load_yaml("humanoid.yaml")),
+        rendering=RenderingConfig.from_dict(load_yaml("viewer.yaml")["rendering"]),
     )
