@@ -1,0 +1,20 @@
+AGENTS.md
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+deleted/
+
+# Generated output: keep the folder (via .gitkeep), ignore its contents.
+data/*
+!data/.gitkeep
+checkpoints/*
+!checkpoints/.gitkeep
+runs/*
+!runs/.gitkeep
+
+.venv/
+__pycache__/
+*.egg-info/
+dist/
+build/
+TODO.md
