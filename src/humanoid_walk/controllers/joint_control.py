@@ -54,18 +54,6 @@ def _check_joints(names: set[JointName] | set, what: str) -> None:
         raise ValueError(f"{what}: missing={sorted(missing)}, unknown={sorted(extra)}")
 
 
-def build_joint_controllers(
-    joint_configs: dict[JointName, Config],
-    controller_configs: dict[str, Config],
-) -> JointControllers:
-    """Build one JointController per joint, each with its own controller instance."""
-    _check_joints(set(joint_configs), "joint_configs")
-    return {
-        name: JointController(cfg, make_controller(controller_configs[cfg.type]))
-        for name, cfg in joint_configs.items()
-    }
-
-
 class BodyController:
     """A controller for the entire humanoid robot, managing multiple joints."""
 
@@ -88,3 +76,37 @@ class BodyController:
             name: self.joint_controllers[name].compute_torque(targets[name], states[name])
             for name in JointName
         }
+
+
+def base_name(name: JointName) -> str:
+    """'hip_l' -> 'hip', 'neck' -> 'neck'."""
+    return name.value.removesuffix("_l").removesuffix("_r")
+
+
+def build_joint_controllers(
+    joint_configs: dict[JointName, Config],
+    controller_types: dict[JointName, str],
+    controller_configs: dict[str, Config],
+) -> JointControllers:
+    """Build one JointController per joint, each with its own controller instance."""
+    _check_joints(set(joint_configs), "joint_configs")
+    _check_joints(set(controller_types), "controller_types")
+    return {
+        name: JointController(
+            joint_configs[name],
+            make_controller(controller_configs[controller_types[name]]),
+        )
+        for name in JointName
+    }
+
+
+def make_body_controller(
+    config: Config,
+    joint_cfg_by_base: dict[str, Config],
+    controller_types: dict[str, str],
+    controller_cfgs: dict[str, Config],
+) -> BodyController:
+    """Expand per-joint configs (hip) into per-side ones (hip_l, hip_r) and build."""
+    joint_configs = {name: joint_cfg_by_base[base_name(name)] for name in JointName}
+    types = {JointName(k): v for k, v in controller_types.items()}
+    return BodyController(config, build_joint_controllers(joint_configs, types, controller_cfgs))

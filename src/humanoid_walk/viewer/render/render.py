@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pygame
 import pymunk
 from pymunk.vec2d import Vec2d
+from humanoid_walk.controllers.joint_state import JointName, JointTargets
 
 if TYPE_CHECKING:
     from humanoid_walk.viewer.render.app import App
@@ -52,6 +53,10 @@ class Renderer:
             if self.mouse_joint is not None:
                 self.space.remove(self.mouse_joint)
                 self.mouse_joint = None
+
+    def get_targets(self) -> JointTargets:
+        """Target angle (rad) for every joint. Placeholder: hold all at 0."""
+        return {name: 0.0 for name in JointName}
 
     def update(self):
         """Per-frame update: move the mouse body."""

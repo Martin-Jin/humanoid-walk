@@ -5,6 +5,7 @@ import pymunk.pygame_util
 from humanoid_walk.config import Config
 from humanoid_walk.sim.physics import Simulation
 from humanoid_walk.viewer.render.render import Renderer
+from humanoid_walk.controllers.joint_control import make_body_controller
 
 
 class App:
@@ -21,6 +22,14 @@ class App:
         # Headless physics, then the drawing layer on top of it
         self.sim = Simulation(config)
         self.sim.setup()
+        self.targets = {}
+        joint_cfg_by_base = {j.name: j for j in config.humanoid.joint_configs}
+        self.body = make_body_controller(
+            config,
+            joint_cfg_by_base,
+            config.joint_controller_types,
+            config.controllers,
+        )
         self.draw_options = pymunk.pygame_util.DrawOptions(self.screen)
         self.renderer = Renderer(self)
 
@@ -32,9 +41,12 @@ class App:
                 if event.type == pygame.QUIT:
                     running = False
                 self.renderer.handle_event(event)
+            self.targets = self.renderer.get_targets()
 
-            # Main rendering and simulation step
-            self.sim.step()
+            # Compute and apply torques based on targets and current states
+            # Also rendrer the simulation
+            self.sim.control_step(self.body, self.targets)
+
             self.renderer.update()
 
             self.screen.fill((255, 255, 255))  # Clear screen with white

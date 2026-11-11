@@ -4,6 +4,8 @@ This includes the simulation of the humanoid and environment."""
 import pymunk
 
 from humanoid_walk.config import Config
+from humanoid_walk.controllers.joint_state import JointName
+from humanoid_walk.controllers.joint_state import JointName, JointState, JointStates
 
 
 def limit_velocity(body, gravity, damping, dt):
@@ -23,7 +25,7 @@ class Simulation:
         self.config = config
         self.ppm = config.rendering.pixels_per_meter
         self.space = pymunk.Space()
-        self.space.gravity = (0.0, 900.0)
+        self.space.gravity = (0.0, config.world.gravity_mps2 * self.ppm)
         self.humanoid: list[pymunk.Body] = []
 
     def px(self, meters: float) -> float:
@@ -205,9 +207,9 @@ class Simulation:
         # Joint limits from config
         cfg = {j.name: j for j in h.joint_configs}
 
-        def limit(a, b, name):
+        def limit(child, parent, name):
             lo, hi = cfg[name].limits
-            return pymunk.RotaryLimitJoint(a, b, lo, hi)
+            return pymunk.RotaryLimitJoint(parent, child, lo, hi)
 
         self.neck_limit = limit(self.head, self.torso, "neck")
         self.shoulder_l_limit = limit(self.arm_l, self.torso, "shoulder")
@@ -218,6 +220,20 @@ class Simulation:
         self.knee_r_limit = limit(self.shin_r, self.leg_r, "knee")
         self.ankle_l_limit = limit(self.foot_l, self.shin_l, "ankle")
         self.ankle_r_limit = limit(self.foot_r, self.shin_r, "ankle")
+
+        # (child, parent) body for each joint. Joint angle = child.angle - parent.angle.
+        self.joint_bodies: dict[JointName, tuple[pymunk.Body, pymunk.Body]] = {
+            JointName.NECK: (self.head, self.torso),
+            JointName.SHOULDER_L: (self.arm_l, self.torso),
+            JointName.SHOULDER_R: (self.arm_r, self.torso),
+            JointName.HIP_L: (self.leg_l, self.torso),
+            JointName.HIP_R: (self.leg_r, self.torso),
+            JointName.KNEE_L: (self.shin_l, self.leg_l),
+            JointName.KNEE_R: (self.shin_r, self.leg_r),
+            JointName.ANKLE_L: (self.foot_l, self.shin_l),
+            JointName.ANKLE_R: (self.foot_r, self.shin_r),
+        }
+        assert set(self.joint_bodies) == set(JointName)
 
         # Add all joints to space
         self.space.add(
@@ -262,6 +278,32 @@ class Simulation:
                 body.angular_velocity,
             ]
         return obs
+
+    def joint_states(self) -> JointStates:
+        """Read each joint's angle and angular velocity from the pymunk bodies."""
+        dt = 1.0 / self.config.world.sim_hz
+        return {
+            name: JointState(
+                current=child.angle - parent.angle,
+                velocity=child.angular_velocity - parent.angular_velocity,
+                dt=dt,
+            )
+            for name, (child, parent) in self.joint_bodies.items()
+        }
+
+    def apply_torques(self, torques: dict[JointName, float]) -> None:
+        """Apply torques given in N·m (SI) to the pixel-scale world."""
+        scale = self.ppm**2
+        for name, torque in torques.items():
+            child, parent = self.joint_bodies[name]
+            child.torque += torque * scale
+            parent.torque -= torque * scale
+
+    def control_step(self, body_controller, targets: dict[JointName, float]) -> None:
+        """One tick: read states, compute torques, apply, step."""
+        torques = body_controller.compute_torques(targets, self.joint_states())
+        self.apply_torques(torques)
+        self.step()
 
     def feet_on_ground(self) -> tuple[bool, bool]:
         """Whether each foot is touching anything (the ground, in practice)."""

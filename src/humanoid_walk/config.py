@@ -28,6 +28,7 @@ class JointConfig:
     """Configuration for a single joint of the humanoid agent."""
 
     name: str
+    type: str
     limits: tuple[float, float]
     damping: float
     max_torque: float
@@ -76,12 +77,26 @@ class RenderingConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ControllerConfig:
+    """Configuration for a single controller type."""
+
+    type: str
+    gains: dict[str, float]
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> Self:
+        return cls(type=raw["type"], gains=dict(raw["gains"]))
+
+
+@dataclass(frozen=True, slots=True)
 class Config:
     """Configuration for the humanoid walk project."""
 
     world: WorldConfig
     humanoid: HumanoidConfig
     rendering: RenderingConfig
+    controllers: dict[str, ControllerConfig]
+    joint_controller_types: dict[str, str]  # keyed by JointName value, e.g. "hip_l"
 
 
 def load_yaml(name: str, directory: Path = CONFIGS_DIR) -> dict[str, Any]:
@@ -94,8 +109,11 @@ def load_yaml(name: str, directory: Path = CONFIGS_DIR) -> dict[str, Any]:
 
 
 def load_config() -> Config:
+    raw = load_yaml("controller.yaml")
     return Config(
         world=WorldConfig.from_dict(load_yaml("sim.yaml")["world"]),
         humanoid=HumanoidConfig.from_dict(load_yaml("humanoid.yaml")),
         rendering=RenderingConfig.from_dict(load_yaml("viewer.yaml")["rendering"]),
+        controllers={k: ControllerConfig.from_dict(v) for k, v in raw["Controller"].items()},
+        joint_controller_types={k: v["type"] for k, v in raw["JointController"].items()},
     )
