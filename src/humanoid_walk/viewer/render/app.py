@@ -2,6 +2,7 @@
 
 import pygame
 import pymunk.pygame_util
+from humanoid_walk.agents.policy import HoldPolicy
 from humanoid_walk.config import Config
 from humanoid_walk.sim.physics import Simulation
 from humanoid_walk.viewer.render.render import Renderer
@@ -32,6 +33,7 @@ class App:
         )
         self.draw_options = pymunk.pygame_util.DrawOptions(self.screen)
         self.renderer = Renderer(self)
+        self.policy = HoldPolicy()  # Default policy that holds the humanoid in a standing pose
 
     def run(self):
         """Run the main loop of the application."""
@@ -41,8 +43,7 @@ class App:
                 if event.type == pygame.QUIT:
                     running = False
                 self.renderer.handle_event(event)
-            self.targets = self.renderer.get_targets()
-
+            self.targets = self.policy.act(self.sim.joint_states())
             # Compute and apply torques based on targets and current states
             # Also rendrer the simulation
             self.sim.control_step(self.body, self.targets)
