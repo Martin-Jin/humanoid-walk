@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 
 from humanoid_walk.config import Config
-from humanoid_walk.controllers.joint_state import JointState
+from humanoid_walk.controllers.joint_state import JointCommand
 
 
 class Controller(ABC):
@@ -15,7 +15,7 @@ class Controller(ABC):
         self.type = config.type
 
     @abstractmethod
-    def compute_action(self, state: JointState) -> float:
+    def compute_action(self, command: JointCommand) -> float:
         """Compute the action to take based on the current joint state."""
 
     def reset(self) -> None:
@@ -29,8 +29,8 @@ class PController(Controller):
         super().__init__(config)
         self.kp = self.gains.get("Kp", 1.0)
 
-    def compute_action(self, state: JointState) -> float:
-        error = state.target - state.current
+    def compute_action(self, command: JointCommand) -> float:
+        error = command.target - command.state.current
         return self.kp * error
 
 
@@ -42,9 +42,9 @@ class PDController(Controller):
         self.kp = self.gains.get("Kp", 1.0)
         self.kd = self.gains.get("Kd", 0.1)
 
-    def compute_action(self, state: JointState) -> float:
-        error = state.target - state.current
-        return self.kp * error - self.kd * state.velocity
+    def compute_action(self, command: JointCommand) -> float:
+        error = command.target - command.state.current
+        return self.kp * error - self.kd * command.state.velocity
 
 
 class PIController(Controller):
@@ -57,9 +57,9 @@ class PIController(Controller):
         self.integral_limit = self.gains.get("integral_limit", 10.0)
         self.integral = 0.0
 
-    def compute_action(self, state: JointState) -> float:
-        error = state.target - state.current
-        self.integral += error * state.dt
+    def compute_action(self, command: JointCommand) -> float:
+        error = command.target - command.state.current
+        self.integral += error * command.state.dt
         self.integral = max(min(self.integral, self.integral_limit), -self.integral_limit)
         return self.kp * error + self.ki * self.integral
 
@@ -78,11 +78,11 @@ class PIDController(Controller):
         self.integral_limit = self.gains.get("integral_limit", 10.0)
         self.integral = 0.0
 
-    def compute_action(self, state: JointState) -> float:
-        error = state.target - state.current
-        self.integral += error * state.dt
+    def compute_action(self, command: JointCommand) -> float:
+        error = command.target - command.state.current
+        self.integral += error * command.state.dt
         self.integral = max(min(self.integral, self.integral_limit), -self.integral_limit)
-        return self.kp * error + self.ki * self.integral - self.kd * state.velocity
+        return self.kp * error + self.ki * self.integral - self.kd * command.state.velocity
 
     def reset(self) -> None:
         self.integral = 0.0
