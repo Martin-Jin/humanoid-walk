@@ -28,7 +28,6 @@ class JointConfig:
     """Configuration for a single joint of the humanoid agent."""
 
     name: str
-    type: str
     limits: tuple[float, float]
     damping: float
     max_torque: float

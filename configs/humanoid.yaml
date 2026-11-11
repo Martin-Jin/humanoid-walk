@@ -1,38 +1,53 @@
-# Config data for the humanoid, including body dimensions, joint limits, and other physical properties.
-mass_kg: 75.0
-height_m: 1.8
-head_radius_m: 0.1
-leg_length_m: 0.9
-leg_width_m: 0.1
-arm_length_m: 0.7
-arm_width_m: 0.1
-torso_length_m: 0.6
-torso_width_m: 0.3
-foot_length_m: 0.25
-foot_width_m: 0.05
+# Humanoid body and joint properties.
+# Lengths in m, mass in kg, angles in rad, torque in N·m.
+mass_kg: 75.0 # kg, total body mass
+height_m: 1.8 # m
+head_radius_m: 0.1 # m
+leg_length_m: 0.9 # m, thigh + shin combined (each is half)
+leg_width_m: 0.1 # m
+arm_length_m: 0.7 # m
+arm_width_m: 0.1 # m
+torso_length_m: 0.6 # m
+torso_width_m: 0.3 # m
+foot_length_m: 0.25 # m
+foot_width_m: 0.05 # m
+
+# Joint angle = child.angle - parent.angle, 0 = standing pose.
+# Positive angle and positive torque both turn the child clockwise on screen.
+# limits:     [min, max] in rad
+# damping:    N·m·s/rad (not currently applied in the torque calculation)
+# friction:   dimensionless surface friction coefficient (pymunk shape friction).
+#             Only the first entry (hip) is read at the moment.
+# max_torque: N·m, torque is clamped to ±max_torque.
+#             Roughly peak human values for a 75 kg adult.
 joint_configs:
-  - name: hip
+  - name: hip # child = thigh, parent = torso
+    # + leg swings backward, - leg swings forward
     limits: [-1.57, 1.57]
     damping: 0.1
     friction: 0.5
-    max_torque: 150.0
-  - name: knee
+    max_torque: 200.0
+  - name: knee # child = shin, parent = thigh
+    # + knee flexes (shin swings backward), 0 = straight leg, no hyperextension
     limits: [0.0, 2.0]
     damping: 0.1
     friction: 0.5
-    max_torque: 150.0
-  - name: ankle
+    max_torque: 200.0
+  - name: ankle # child = foot, parent = shin
+    # + toes point down (plantarflexion), - toes point up (dorsiflexion)
     limits: [-0.5, 0.5]
     damping: 0.1
     friction: 0.5
-    max_torque: 150.0
-  - name: neck
+    max_torque: 120.0
+  - name: neck # child = head, parent = torso
+    # + head tilts forward (nod), - head tilts back
     limits: [-0.8, 0.8]
     damping: 0.1
     friction: 0.5
-    max_torque: 50.0
-  - name: shoulder
+    max_torque: 30.0
+  - name: shoulder # child = arm, parent = torso
+    # + arm swings backward, - arm swings forward
     limits: [-2.35, 2.35]
     damping: 0.1
     friction: 0.5
-    max_torque: 100.0
+    max_torque: 70.0

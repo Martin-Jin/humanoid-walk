@@ -55,8 +55,8 @@ class Renderer:
                 self.mouse_joint = None
 
     def get_targets(self) -> JointTargets:
-        """Target angle (rad) for every joint. Placeholder: hold all at 0."""
-        return {name: 0.0 for name in JointName}
+        """Target angle (rad) for every joint. Placeholder: hold all at 3."""
+        return {name: 3.0 for name in JointName}
 
     def update(self):
         """Per-frame update: move the mouse body."""

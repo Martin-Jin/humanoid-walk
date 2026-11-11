@@ -1,45 +1,57 @@
-# Controller configuration
+# Controller gains. Output is torque in N·m, error is target - current in rad.
+# Kp: N·m/rad          (positive torque turns the joint toward positive angle)
+# Ki: N·m/(rad·s)      (integrates error over time)
+# Kd: N·m·s/rad        (subtracts angular velocity, so positive Kd = damping)
+# integral_limit: rad·s, clamps the integral term (anti-windup)
+#
+# Gains are sized per joint group from segment inertia, assuming sim_hz ≈ 60.
+# Kd is kept low enough that explicit stepping stays stable (Kd·dt / inertia < 2).
 Controller:
-  PID:
+  PD_LEG: # hip, knee
     gains:
-      Kp: 1.0
-      Ki: 0.1
-      Kd: 0.05
-      integral_limit: 10.0
-    type: PID
-  P:
-    gains:
-      Kp: 1.0
-    type: P
-  PD:
-    gains:
-      Kp: 1.0
-      Kd: 0.05
+      Kp: 250.0 # saturates at ~0.8 rad error for a 200 N·m joint
+      Kd: 25.0
     type: PD
-  PI:
+  PD_ANKLE: # the foot is light (~0.008 kg·m²), so gains must stay small
     gains:
-      Kp: 1.0
-      Ki: 0.1
-      integral_limit: 10.0
-    type: PI
+      Kp: 30.0
+      Kd: 0.5
+    type: PD
+  PD_ARM:
+    gains:
+      Kp: 60.0
+      Kd: 8.0
+    type: PD
+  PD_NECK:
+    gains:
+      Kp: 20.0
+      Kd: 1.0
+    type: PD
+  PID_LEG: # like PD_LEG, plus Ki to remove steady gravity sag
+    gains:
+      Kp: 250.0
+      Ki: 20.0
+      Kd: 25.0
+      integral_limit: 5.0 # Ki · limit = 100 N·m max integral contribution
+    type: PID
 
 # One entry per JointName value; `type` selects a key from Controller above
 JointController:
   neck:
-    type: PID
+    type: PD_NECK
   shoulder_l:
-    type: PID
+    type: PD_ARM
   shoulder_r:
-    type: PID
+    type: PD_ARM
   hip_l:
-    type: PID
+    type: PD_LEG
   hip_r:
-    type: PID
+    type: PD_LEG
   knee_l:
-    type: PID
+    type: PD_LEG
   knee_r:
-    type: PID
+    type: PD_LEG
   ankle_l:
-    type: PID
+    type: PD_ANKLE
   ankle_r:
-    type: PID
+    type: PD_ANKLE
