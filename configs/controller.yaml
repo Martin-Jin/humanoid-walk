@@ -1,0 +1,34 @@
+# Controller configuration
+Controller:
+  PID:
+    gains:
+      Kp: 1.0
+      Ki: 0.1
+      Kd: 0.05
+    type: PID
+  P:
+    gains:
+      Kp: 1.0
+    type: P
+  PD:
+    gains:
+      Kp: 1.0
+      Kd: 0.05
+    type: PD
+  PI:
+    gains:
+      Kp: 1.0
+      Ki: 0.1
+    type: PI
+
+JointController:
+  hip:
+    type: PID
+  knee:
+    type: PID
+  ankle:
+    type: PID
+  arm:
+    type: PID
+  neck:
+    type: PID
