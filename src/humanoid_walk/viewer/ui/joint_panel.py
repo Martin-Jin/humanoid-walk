@@ -2,7 +2,8 @@
 
 Click a joint to edit its target (rad). The box opens fully selected, so typing
 replaces the value. A slider below it spans the joint's range. Enter or clicking
-away saves, Escape cancels. The panel is also a Policy.
+away saves, Escape cancels. Left joints are green, right joints orange, matching
+the sprite. The panel is also a Policy.
 """
 
 from __future__ import annotations
@@ -11,7 +12,13 @@ import math
 
 import pygame
 
-from humanoid_walk.controllers.joint_state import JointName, JointStates, JointTargets
+from humanoid_walk.controllers.joint_state import (
+    LEFT_RGB,
+    RIGHT_RGB,
+    JointName,
+    JointStates,
+    JointTargets,
+)
 from humanoid_walk.agents.policy import Policy
 
 PANEL_W, PANEL_H = 220, 450
@@ -36,29 +43,37 @@ JOINT_POS: dict[JointName, tuple[int, int]] = {
 
 HEAD_CENTER, HEAD_RADIUS = (110, 38), 20
 
-# Stick-figure lines, drawn behind the markers
-BONES = [
-    ((110, 62), (110, 190)),  # spine
-    ((80, 100), (140, 100)),  # shoulders
-    ((95, 190), (125, 190)),  # hips
-    ((80, 100), (60, 170)),  # left arm
-    ((140, 100), (160, 170)),  # right arm
-    ((95, 190), (90, 260)),  # left thigh
-    ((90, 260), (88, 330)),  # left shin
-    ((88, 330), (72, 340)),  # left foot
-    ((125, 190), (130, 260)),  # right thigh
-    ((130, 260), (132, 330)),  # right shin
-    ((132, 330), (148, 340)),  # right foot
-]
-
 BG = (240, 240, 240, 235)
 BORDER = (120, 120, 120)
 BONE = (90, 90, 90)
-IDLE = (150, 150, 150)
-SET = (60, 160, 90)  # target is non-zero
+IDLE = (150, 150, 150)  # centre joints (neck) and slider track
 SELECTED = (40, 110, 220)
 
+# Stick-figure lines, drawn behind the markers: (start, end, side colour or None)
+BONES = [
+    ((110, 62), (110, 190), None),  # spine
+    ((80, 100), (140, 100), None),  # shoulders
+    ((95, 190), (125, 190), None),  # hips
+    ((80, 100), (60, 170), LEFT_RGB),  # left arm
+    ((140, 100), (160, 170), RIGHT_RGB),  # right arm
+    ((95, 190), (90, 260), LEFT_RGB),  # left thigh
+    ((90, 260), (88, 330), LEFT_RGB),  # left shin
+    ((88, 330), (72, 340), LEFT_RGB),  # left foot
+    ((125, 190), (130, 260), RIGHT_RGB),  # right thigh
+    ((130, 260), (132, 330), RIGHT_RGB),  # right shin
+    ((132, 330), (148, 340), RIGHT_RGB),  # right foot
+]
+
 DEFAULT_LIMITS = (-math.pi, math.pi)
+
+
+def _side_colour(name: JointName) -> tuple[int, int, int]:
+    """Left joints green, right joints orange, neck neutral."""
+    if name.value.endswith("_l"):
+        return LEFT_RGB
+    if name.value.endswith("_r"):
+        return RIGHT_RGB
+    return IDLE
 
 
 class JointPanel(Policy):
@@ -195,19 +210,17 @@ class JointPanel(Policy):
         pygame.draw.rect(panel, BORDER, panel.get_rect(), 1)
 
         panel.blit(self.small.render("Joint targets (rad)", True, BONE), (8, 6))
-        for a, b in BONES:
-            pygame.draw.line(panel, BONE, a, b, 3)
+        for a, b, side in BONES:
+            pygame.draw.line(panel, side or BONE, a, b, 3)
         pygame.draw.circle(panel, BONE, HEAD_CENTER, HEAD_RADIUS, 3)
 
         for name, pos in JOINT_POS.items():
-            if name == self.selected:
-                colour = SELECTED
-            elif abs(self.targets[name]) > 1e-9:
-                colour = SET
-            else:
-                colour = IDLE
-            pygame.draw.circle(panel, colour, pos, JOINT_RADIUS)
+            pygame.draw.circle(panel, _side_colour(name), pos, JOINT_RADIUS)
             pygame.draw.circle(panel, (255, 255, 255), pos, JOINT_RADIUS, 2)
+            if abs(self.targets[name]) > 1e-9:  # white dot: target is non-zero
+                pygame.draw.circle(panel, (255, 255, 255), pos, 3)
+            if name == self.selected:  # dark ring: currently being edited
+                pygame.draw.circle(panel, (20, 20, 20), pos, JOINT_RADIUS + 4, 3)
 
         if self.selected is not None:
             self._draw_editor(panel)
@@ -218,8 +231,10 @@ class JointPanel(Policy):
         screen.blit(panel, self.rect.topleft)
 
     def _draw_editor(self, panel: pygame.Surface) -> None:
+        colour = _side_colour(self.selected)
+
         # Label and text box
-        label = self.font.render(self.selected.value, True, BONE)
+        label = self.font.render(self.selected.value, True, colour)
         panel.blit(label, (10, EDIT_BOX.y + 5))
         pygame.draw.rect(panel, (255, 255, 255), EDIT_BOX)
         pygame.draw.rect(panel, SELECTED, EDIT_BOX, 2)
@@ -242,7 +257,7 @@ class JointPanel(Policy):
             pygame.draw.line(panel, BONE, (zx, SLIDER_Y - 6), (zx, SLIDER_Y + 6), 2)
         frac = min(max((self._current_value() - lo) / (hi - lo), 0.0), 1.0)
         kx = SLIDER_X0 + frac * (SLIDER_X1 - SLIDER_X0)
-        pygame.draw.circle(panel, SELECTED, (kx, SLIDER_Y), KNOB_RADIUS)
+        pygame.draw.circle(panel, colour, (kx, SLIDER_Y), KNOB_RADIUS)
         pygame.draw.circle(panel, (255, 255, 255), (kx, SLIDER_Y), KNOB_RADIUS, 2)
         panel.blit(self.small.render(f"{lo:.2f}", True, BONE), (SLIDER_X0 - 6, SLIDER_Y + 10))
         hi_text = self.small.render(f"{hi:.2f}", True, BONE)

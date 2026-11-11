@@ -3,6 +3,10 @@
 from dataclasses import dataclass
 from enum import Enum
 
+# Shared side colours (RGB): left limbs green, right limbs orange
+LEFT_RGB = (40, 170, 90)
+RIGHT_RGB = (230, 120, 30)
+
 
 class JointName(str, Enum):
     """The only joints that can exist. Single source of truth for joint names."""

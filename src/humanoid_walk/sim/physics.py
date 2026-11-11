@@ -4,8 +4,13 @@ This includes the simulation of the humanoid and environment."""
 import pymunk
 
 from humanoid_walk.config import Config
-from humanoid_walk.controllers.joint_state import JointName
-from humanoid_walk.controllers.joint_state import JointName, JointState, JointStates
+from humanoid_walk.controllers.joint_state import (
+    LEFT_RGB,
+    RIGHT_RGB,
+    JointName,
+    JointState,
+    JointStates,
+)
 
 
 def limit_velocity(body, gravity, damping, dt):
@@ -101,8 +106,7 @@ class Simulation:
         thigh_len = shin_len = h.leg_length_m / 2
         thigh_half = self.px(thigh_len) / 2
         shin_half = self.px(shin_len) / 2
-        foot_half = self.px(h.foot_length_m) / 2
-        ankle_off = self.px(0.055)  # ankle sits 0.055 m behind the foot's centre (0.07 m from heel)
+        ankle_off = self.px(0.03)  # ankle sits 0.03 m behind the foot's centre (0.095 m from heel)
 
         # Spawn position: upright, feet resting on the ground surface
         tx = r.screen_width / 2
@@ -208,6 +212,15 @@ class Simulation:
             for shape in body.shapes:
                 shape.filter = pymunk.ShapeFilter(group=1)
 
+        # Colour limbs by side so left and right can be told apart
+        for colour, limbs in (
+            (LEFT_RGB, (self.arm_l, self.leg_l, self.shin_l, self.foot_l)),
+            (RIGHT_RGB, (self.arm_r, self.leg_r, self.shin_r, self.foot_r)),
+        ):
+            for body in limbs:
+                for shape in body.shapes:
+                    shape.color = (*colour, 255)
+
         # Joint limits from config
         cfg = {j.name: j for j in h.joint_configs}
 
@@ -265,13 +278,21 @@ class Simulation:
         self.mouse_joint = None
         self.mouse_body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
 
+    @property
+    def sub_dt(self) -> float:
+        """Duration of one physics substep in seconds."""
+        return 1.0 / (self.config.world.sim_hz * self.substeps)
+
     def step(self):
         """Advance the simulation by one substep."""
         self.space.step(self.sub_dt)
 
-    @property
-    def sub_dt(self) -> float:
-        return 1.0 / (self.config.world.sim_hz * self.substeps)
+    def com_world(self) -> tuple[float, float]:
+        """Whole-body centre of mass in world pixels (x, y)."""
+        total = sum(b.mass for b in self.humanoid)
+        x = sum(b.mass * b.position.x for b in self.humanoid) / total
+        y = sum(b.mass * b.position.y for b in self.humanoid) / total
+        return x, y
 
     def observe(self) -> list[float]:
         """Flat observation vector for all humanoid bodies."""
@@ -289,7 +310,7 @@ class Simulation:
 
     def joint_states(self) -> JointStates:
         """Read each joint's angle and angular velocity from the pymunk bodies."""
-        dt = 1.0 / self.config.world.sim_hz
+        dt = self.sub_dt
         return {
             name: JointState(
                 current=child.angle - parent.angle,

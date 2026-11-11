@@ -2,13 +2,16 @@
 
 import pygame
 import pymunk.pygame_util
+
 from humanoid_walk.config import Config
-from humanoid_walk.sim.physics import Simulation
-from humanoid_walk.viewer.render.render import Renderer
-from humanoid_walk.controllers.joint_control import make_body_controller
-from humanoid_walk.viewer.ui.joint_panel import JointPanel
-from humanoid_walk.controllers.joint_state import JointName
 from humanoid_walk.controllers.joint_control import base_name, make_body_controller
+from humanoid_walk.controllers.joint_state import JointName
+from humanoid_walk.sim.physics import Simulation
+from humanoid_walk.viewer.ui.joint_panel import JointPanel
+from humanoid_walk.viewer.render.render import Renderer
+
+COM_COLOUR = (220, 30, 30)
+COM_RADIUS = 6
 
 
 class App:
@@ -23,29 +26,30 @@ class App:
         self.clock = pygame.time.Clock()
 
         # Headless physics, then the drawing layer on top of it
-        self.sim = Simulation(
-            config
-        )  # the simulation handles the physics of the humanoid and environment
-        self.sim.setup()  # the simulation is set up with the humanoid and environment
-        self.targets = {}  # the current target angles for each joint, keyed by JointName
+        self.sim = Simulation(config)
+        self.sim.setup()
+        self.targets = {}
         joint_cfg_by_base = {j.name: j for j in config.humanoid.joint_configs}
-        limits = {
-            name: joint_cfg_by_base[base_name(name)].limits for name in JointName
-        }  # the limits for each joint, keyed by JointName
-        self.panel = JointPanel(
-            rendering.screen_width, limits=limits
-        )  # the control panel for joint targets, with limits for each joint
         self.body = make_body_controller(
             config,
             joint_cfg_by_base,
             config.joint_controller_types,
             config.controllers,
-        )  # the body controller that manages all joint controllers
-        self.draw_options = pymunk.pygame_util.DrawOptions(
-            self.screen
-        )  # the draw options for pymunk, used to render the simulation
-        self.renderer = Renderer(self)  # the renderer that handles drawing and mouse interaction
-        self.policy = self.panel  # the policy that generates target angles for each joint based on user input from the panel
+        )
+
+        # Manual joint target panel; slider ranges come from humanoid.yaml
+        limits = {name: joint_cfg_by_base[base_name(name)].limits for name in JointName}
+        self.panel = JointPanel(rendering.screen_width, limits=limits)
+        self.policy = self.panel  # the panel is the policy for now
+
+        self.draw_options = pymunk.pygame_util.DrawOptions(self.screen)
+        self.renderer = Renderer(self)
+
+    def draw_com(self):
+        """Draw a red dot at the whole-body centre of mass."""
+        x, y = self.sim.com_world()
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(y)), COM_RADIUS + 2)
+        pygame.draw.circle(self.screen, COM_COLOUR, (int(x), int(y)), COM_RADIUS)
 
     def run(self):
         """Run the main loop of the application."""
@@ -57,16 +61,16 @@ class App:
                 # Panel gets first look; the renderer only sees events it didn't consume
                 if not self.panel.handle_event(event):
                     self.renderer.handle_event(event)
+
+            # Policy picks targets, then torques are computed, applied and stepped
             self.targets = self.policy.act(self.sim.joint_states())
-            # Compute and apply torques based on targets and current states
-            # Also rendrer the simulation
             self.sim.control_step(self.body, self.targets)
 
             self.renderer.update()
 
             self.screen.fill((255, 255, 255))  # Clear screen with white
             self.sim.space.debug_draw(self.draw_options)
-            # Here you would add code to render the humanoid and environment
+            self.draw_com()
             self.panel.draw(self.screen)
             pygame.display.flip()
             self.clock.tick(self.config.world.sim_hz)
