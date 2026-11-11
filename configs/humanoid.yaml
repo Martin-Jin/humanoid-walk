@@ -26,3 +26,13 @@ joint_configs:
     damping: 0.1
     friction: 0.5
     max_torque: 150.0
+  - name: neck
+    limits: [-0.8, 0.8]
+    damping: 0.1
+    friction: 0.5
+    max_torque: 50.0
+  - name: shoulder
+    limits: [-2.35, 2.35]
+    damping: 0.1
+    friction: 0.5
+    max_torque: 100.0
