@@ -5,6 +5,7 @@ Controller:
       Kp: 1.0
       Ki: 0.1
       Kd: 0.05
+      integral_limit: 10.0
     type: PID
   P:
     gains:
@@ -19,16 +20,26 @@ Controller:
     gains:
       Kp: 1.0
       Ki: 0.1
+      integral_limit: 10.0
     type: PI
 
+# One entry per JointName value; `type` selects a key from Controller above
 JointController:
-  hip:
-    type: PID
-  knee:
-    type: PID
-  ankle:
-    type: PID
-  arm:
-    type: PID
   neck:
+    type: PID
+  shoulder_l:
+    type: PID
+  shoulder_r:
+    type: PID
+  hip_l:
+    type: PID
+  hip_r:
+    type: PID
+  knee_l:
+    type: PID
+  knee_r:
+    type: PID
+  ankle_l:
+    type: PID
+  ankle_r:
     type: PID
