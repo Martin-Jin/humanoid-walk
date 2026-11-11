@@ -54,6 +54,19 @@ class HumanoidConfig:
     head_radius_m: float
     torso_length_m: float
     torso_width_m: float
+    part_masses_kg: dict[str, float]
+
+    def __post_init__(self):
+        total = (
+            self.part_masses_kg["head"]
+            + self.part_masses_kg["torso"]
+            + 2 * self.part_masses_kg["arm"]
+            + 2 * self.part_masses_kg["thigh"]
+            + 2 * self.part_masses_kg["shin"]
+            + 2 * self.part_masses_kg["foot"]
+        )
+        if abs(total - self.mass_kg) > 1e-6:
+            raise ValueError(f"part_masses_kg sums to {total}, but mass_kg is {self.mass_kg}")
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> Self:

@@ -27,6 +27,7 @@ class Simulation:
         self.space = pymunk.Space()
         self.space.gravity = (0.0, config.world.gravity_mps2 * self.ppm)
         self.humanoid: list[pymunk.Body] = []
+        self.substeps = 8  # physics steps per frame; torques are recomputed each one
 
     def px(self, meters: float) -> float:
         """Convert meters to pixels."""
@@ -81,6 +82,7 @@ class Simulation:
         h = self.config.humanoid
         r = self.config.rendering
         fric = h.joint_configs[0].friction
+        m = h.part_masses_kg
 
         # Ground
         self.add_segment(
@@ -100,11 +102,13 @@ class Simulation:
         thigh_half = self.px(thigh_len) / 2
         shin_half = self.px(shin_len) / 2
         foot_half = self.px(h.foot_length_m) / 2
+        ankle_off = self.px(0.055)  # ankle sits 0.055 m behind the foot's centre (0.07 m from heel)
 
-        # Spawn position: feet just above the floor
+        # Spawn position: upright, feet resting on the ground surface
         tx = r.screen_width / 2
+        ground_top = r.floor_y_px - self.px(0.025)  # ground segment is 0.05 m thick
         below_torso_centre = torso_half + self.px(h.leg_length_m) + self.px(h.foot_width_m) / 2
-        ty = r.floor_y_px - below_torso_centre - 5
+        ty = ground_top - below_torso_centre - 1  # 1 px gap, so it settles without dropping
 
         top_y = ty - torso_half
         bottom_y = ty + torso_half
@@ -113,7 +117,7 @@ class Simulation:
         self.head = self.add_circle(
             (tx, top_y - head_r),
             h.head_radius_m,
-            mass=5.0,
+            mass=m["head"],
             velocity_func=limit_velocity,
             friction=fric,
         )
@@ -123,7 +127,7 @@ class Simulation:
             (tx, ty),
             length_m=h.torso_length_m,
             width_m=h.torso_width_m,
-            mass=h.mass_kg * 0.5,
+            mass=m["torso"],
             velocity_func=limit_velocity,
             friction=fric,
         )
@@ -134,7 +138,7 @@ class Simulation:
                 (tx, top_y + arm_half),
                 length_m=h.arm_length_m,
                 width_m=h.arm_width_m,
-                mass=h.mass_kg * 0.1,
+                mass=m["arm"],
                 velocity_func=limit_velocity,
                 friction=fric,
             )
@@ -153,7 +157,7 @@ class Simulation:
                 (tx, bottom_y + thigh_half),
                 length_m=thigh_len,
                 width_m=h.leg_width_m,
-                mass=h.mass_kg * 0.15,
+                mass=m["thigh"],
                 velocity_func=limit_velocity,
                 friction=fric,
             )
@@ -161,15 +165,15 @@ class Simulation:
                 (tx, knee_y + shin_half),
                 length_m=shin_len,
                 width_m=h.leg_width_m,
-                mass=h.mass_kg * 0.08,
+                mass=m["shin"],
                 velocity_func=limit_velocity,
                 friction=fric,
             )
             foot = self.add_segment(
-                (tx + foot_half / 2, ankle_y),
+                (tx + ankle_off, ankle_y),
                 length_m=h.foot_length_m,
                 width_m=h.foot_width_m,
-                mass=h.mass_kg * 0.02,
+                mass=m["foot"],
                 velocity_func=limit_velocity,
                 friction=fric,
                 vertical=False,
@@ -177,7 +181,7 @@ class Simulation:
 
             hip = pymunk.PivotJoint(thigh, self.torso, (0, -thigh_half), (0, torso_half))
             knee = pymunk.PivotJoint(shin, thigh, (0, -shin_half), (0, thigh_half))
-            ankle = pymunk.PivotJoint(foot, shin, (-foot_half / 2, 0), (0, shin_half))
+            ankle = pymunk.PivotJoint(foot, shin, (-ankle_off, 0), (0, shin_half))
             return thigh, shin, foot, hip, knee, ankle
 
         (self.leg_l, self.shin_l, self.foot_l, self.hip_l, self.knee_l, self.ankle_l) = make_leg()
@@ -262,8 +266,12 @@ class Simulation:
         self.mouse_body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
 
     def step(self):
-        """Advance the simulation by one tick."""
-        self.space.step(1.0 / self.config.world.sim_hz)
+        """Advance the simulation by one substep."""
+        self.space.step(self.sub_dt)
+
+    @property
+    def sub_dt(self) -> float:
+        return 1.0 / (self.config.world.sim_hz * self.substeps)
 
     def observe(self) -> list[float]:
         """Flat observation vector for all humanoid bodies."""
@@ -300,10 +308,11 @@ class Simulation:
             parent.torque -= torque * scale
 
     def control_step(self, body_controller, targets: dict[JointName, float]) -> None:
-        """One tick: read states, compute torques, apply, step."""
-        torques = body_controller.compute_torques(targets, self.joint_states())
-        self.apply_torques(torques)
-        self.step()
+        """One frame: several substeps of read states, compute torques, apply, step."""
+        for _ in range(self.substeps):
+            torques = body_controller.compute_torques(targets, self.joint_states())
+            self.apply_torques(torques)
+            self.step()
 
     def feet_on_ground(self) -> tuple[bool, bool]:
         """Whether each foot is touching anything (the ground, in practice)."""

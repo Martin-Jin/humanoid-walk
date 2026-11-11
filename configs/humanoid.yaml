@@ -1,6 +1,6 @@
 # Humanoid body and joint properties.
 # Lengths in m, mass in kg, angles in rad, torque in N·m.
-mass_kg: 75.0 # kg, total body mass
+mass_kg: 75.0 # kg, total body mass (must equal the sum of part_masses_kg)
 height_m: 1.8 # m
 head_radius_m: 0.1 # m
 leg_length_m: 0.9 # m, thigh + shin combined (each is half)
@@ -11,6 +11,16 @@ torso_length_m: 0.6 # m
 torso_width_m: 0.3 # m
 foot_length_m: 0.25 # m
 foot_width_m: 0.05 # m
+
+# Mass of each part in kg. Left and right share the same value.
+# Based on standard anthropometric fractions of body mass.
+part_masses_kg:
+  head: 6.0 # 8%
+  torso: 37.5 # 50%
+  arm: 3.75 # 5% each, whole arm
+  thigh: 7.5 # 10% each
+  shin: 3.45 # 4.6% each
+  foot: 1.05 # 1.4% each
 
 # Joint angle = child.angle - parent.angle, 0 = standing pose.
 # Positive angle and positive torque both turn the child clockwise on screen.

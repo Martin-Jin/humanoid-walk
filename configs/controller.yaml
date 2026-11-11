@@ -12,10 +12,15 @@ Controller:
       Kp: 250.0 # saturates at ~0.8 rad error for a 200 N·m joint
       Kd: 25.0
     type: PD
-  PD_ANKLE: # the foot is light (~0.008 kg·m²), so gains must stay small
+  PD_ANKLE: # holds the whole body upright about the ankle
     gains:
-      Kp: 30.0
-      Kd: 0.5
+      Kp: 1500.0 # > ~700 N·m/rad of gravity tipping torque
+      Kd: 15.0 # kept low: foot inertia ~0.02 kg·m², Kd·dt/I must stay < 2
+    type: PD
+  PD_HIP: # keeps the torso upright over the legs
+    gains:
+      Kp: 600.0
+      Kd: 40.0
     type: PD
   PD_ARM:
     gains:
@@ -44,9 +49,9 @@ JointController:
   shoulder_r:
     type: PD_ARM
   hip_l:
-    type: PD_LEG
+    type: PD_HIP
   hip_r:
-    type: PD_LEG
+    type: PD_HIP
   knee_l:
     type: PD_LEG
   knee_r:
