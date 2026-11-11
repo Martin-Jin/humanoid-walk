@@ -1,12 +1,21 @@
 """Shared joint state."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from enum import Enum
 
-if TYPE_CHECKING:
-    from humanoid_walk.controllers.joint_control import JointController
+
+class JointName(str, Enum):
+    """The only joints that can exist. Single source of truth for joint names."""
+
+    NECK = "neck"
+    SHOULDER_L = "shoulder_l"
+    SHOULDER_R = "shoulder_r"
+    HIP_L = "hip_l"
+    HIP_R = "hip_r"
+    KNEE_L = "knee_l"
+    KNEE_R = "knee_r"
+    ANKLE_L = "ankle_l"
+    ANKLE_R = "ankle_r"
 
 
 @dataclass
@@ -18,50 +27,16 @@ class JointState:
     dt: float = 0.01  # Timestep in seconds, used by the integral term
 
 
+JointTargets = dict[JointName, float]
+JointStates = dict[JointName, JointState]
+
+
 @dataclass
 class BodyState:
     """A dataclass to hold the state of the humanoid body."""
 
     position: tuple[float, float]  # Of COM
-    joint_states: dict[str, JointState]
+    joint_states: JointStates
     velocity: tuple[float, float] = (0.0, 0.0)  # Of COM
     angular_velocity: float = 0.0  # About COM
     acceleration: tuple[float, float] = (0.0, 0.0)  # Of COM
-
-
-@dataclass
-class JointCommand:
-    """A dataclass to hold the command for a joint."""
-
-    target: float
-    state: JointState
-
-
-@dataclass
-class JointControllers:
-    """Defines the names of the joints and their corresponding controllers for the humanoid robot."""
-
-    neck: JointController
-    shoulder_l: JointController
-    shoulder_r: JointController
-    hip_l: JointController
-    hip_r: JointController
-    knee_l: JointController
-    knee_r: JointController
-    ankle_l: JointController
-    ankle_r: JointController
-
-
-@dataclass
-class JointCommands:
-    """Defines the commands for each joint of the humanoid robot."""
-
-    neck: JointCommand
-    shoulder_l: JointCommand
-    shoulder_r: JointCommand
-    hip_l: JointCommand
-    hip_r: JointCommand
-    knee_l: JointCommand
-    knee_r: JointCommand
-    ankle_l: JointCommand
-    ankle_r: JointCommand
