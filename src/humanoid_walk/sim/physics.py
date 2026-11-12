@@ -93,8 +93,8 @@ class Simulation:
         self.add_segment(
             (r.screen_width / 2, r.floor_y_px),
             length_m=r.screen_width / self.ppm,
-            width_m=0.05,
-            friction=0.7,
+            width_m=20 / self.ppm,
+            friction=self.config.world.floor_friction,
             vertical=False,
             static=True,
         )

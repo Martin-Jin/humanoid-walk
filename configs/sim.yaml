@@ -5,3 +5,4 @@ world:
   sim_hz: 60 # fixed timestep (1/60)
   arena_width_m: 12.0
   floor_y_m: 0.0
+  floor_friction: 2.0 # pymunk shape friction, dimensionless

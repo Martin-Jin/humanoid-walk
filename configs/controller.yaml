@@ -6,57 +6,44 @@
 #
 # Gains are sized per joint group from segment inertia, assuming sim_hz ≈ 60.
 # Kd is kept low enough that explicit stepping stays stable (Kd·dt / inertia < 2).
+# Each joint (one per JointName value) must appear in exactly one `joints` list.
 Controller:
-  PD_LEG: # hip, knee
+  PD_LEG: # knee
+    joints: [knee_l, knee_r]
+    type: PD
     gains:
       Kp: 250.0 # saturates at ~0.8 rad error for a 200 N·m joint
       Kd: 25.0
-    type: PD
   PD_ANKLE: # holds the whole body upright about the ankle
+    joints: [ankle_l, ankle_r]
+    type: PD
     gains:
       Kp: 1500.0 # > ~700 N·m/rad of gravity tipping torque
       Kd: 15.0 # kept low: foot inertia ~0.02 kg·m², Kd·dt/I must stay < 2
-    type: PD
   PD_HIP: # keeps the torso upright over the legs
+    joints: [hip_l, hip_r]
+    type: PD
     gains:
       Kp: 600.0
       Kd: 40.0
-    type: PD
   PD_ARM:
+    joints: [shoulder_l, shoulder_r]
+    type: PD
     gains:
       Kp: 60.0
       Kd: 8.0
-    type: PD
   PD_NECK:
+    joints: [neck]
+    type: PD
     gains:
       Kp: 20.0
       Kd: 1.0
-    type: PD
-  PID_LEG: # like PD_LEG, plus Ki to remove steady gravity sag
+  PID_LEG: # like PD_LEG, plus Ki to remove steady gravity sag (currently unassigned)
+    joints: []
+    type: PID
     gains:
       Kp: 250.0
       Ki: 20.0
       Kd: 25.0
       integral_limit: 5.0 # Ki · limit = 100 N·m max integral contribution
-    type: PID
 
-# One entry per JointName value; `type` selects a key from Controller above
-JointController:
-  neck:
-    type: PD_NECK
-  shoulder_l:
-    type: PD_ARM
-  shoulder_r:
-    type: PD_ARM
-  hip_l:
-    type: PD_HIP
-  hip_r:
-    type: PD_HIP
-  knee_l:
-    type: PD_LEG
-  knee_r:
-    type: PD_LEG
-  ankle_l:
-    type: PD_ANKLE
-  ankle_r:
-    type: PD_ANKLE

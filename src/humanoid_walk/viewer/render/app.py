@@ -33,7 +33,7 @@ class App:
         self.body = make_body_controller(
             config,
             joint_cfg_by_base,
-            config.joint_controller_types,
+            config.joint_controller_names,
             config.controllers,
         )
 

@@ -7,6 +7,7 @@ from typing import Any, Self
 import yaml
 
 from humanoid_walk.utils.paths import CONFIGS_DIR
+from humanoid_walk.controllers.joint_state import JointName
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +18,7 @@ class WorldConfig:
     sim_hz: int
     arena_width_m: float
     floor_y_m: float
+    floor_friction: float
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> Self:
@@ -90,14 +92,15 @@ class RenderingConfig:
 
 @dataclass(frozen=True, slots=True)
 class ControllerConfig:
-    """Configuration for a single controller type."""
+    """Configuration for a single controller type and the joints it drives."""
 
     type: str
     gains: dict[str, float]
+    joints: tuple[str, ...]
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> Self:
-        return cls(type=raw["type"], gains=dict(raw["gains"]))
+        return cls(type=raw["type"], gains=dict(raw["gains"]), joints=tuple(raw["joints"]))
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,7 +111,9 @@ class Config:
     humanoid: HumanoidConfig
     rendering: RenderingConfig
     controllers: dict[str, ControllerConfig]
-    joint_controller_types: dict[str, str]  # keyed by JointName value, e.g. "hip_l"
+    joint_controller_names: dict[
+        str, str
+    ]  # joint name -> key in `controllers`, e.g. "hip_l" -> "PD_HIP"
 
 
 def load_yaml(name: str, directory: Path = CONFIGS_DIR) -> dict[str, Any]:
@@ -120,12 +125,38 @@ def load_yaml(name: str, directory: Path = CONFIGS_DIR) -> dict[str, Any]:
     return data
 
 
+def build_joint_controller_names(
+    controllers: dict[str, ControllerConfig], joint_names: set[str]
+) -> dict[str, str]:
+    """Map each joint name to the key of the controller that drives it."""
+    mapping: dict[str, str] = {}
+    for name, controller in controllers.items():
+        for joint in controller.joints:
+            if joint in mapping:
+                raise ValueError(f"Joint {joint!r} is in both {mapping[joint]!r} and {name!r}.")
+            mapping[joint] = name
+
+    missing, unknown = joint_names - mapping.keys(), mapping.keys() - joint_names
+    if missing or unknown:
+        raise ValueError(
+            f"Controller joints mismatch: missing={sorted(missing)}, unknown={sorted(unknown)}"
+        )
+    return mapping
+
+
 def load_config() -> Config:
-    raw = load_yaml("controller.yaml")
+    humanoid = HumanoidConfig.from_dict(load_yaml("humanoid.yaml"))
+    controllers = {
+        k: ControllerConfig.from_dict(v)
+        for k, v in load_yaml("controller.yaml")["Controller"].items()
+    }
+
     return Config(
         world=WorldConfig.from_dict(load_yaml("sim.yaml")["world"]),
-        humanoid=HumanoidConfig.from_dict(load_yaml("humanoid.yaml")),
+        humanoid=humanoid,
         rendering=RenderingConfig.from_dict(load_yaml("viewer.yaml")["rendering"]),
-        controllers={k: ControllerConfig.from_dict(v) for k, v in raw["Controller"].items()},
-        joint_controller_types={k: v["type"] for k, v in raw["JointController"].items()},
+        controllers=controllers,
+        joint_controller_names=build_joint_controller_names(
+            controllers, {name.value for name in JointName}
+        ),
     )

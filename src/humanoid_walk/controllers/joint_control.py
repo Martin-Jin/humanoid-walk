@@ -1,6 +1,8 @@
 """Defines the joint control logic for the humanoid robot,
 and provides a controller for the entire humanoid body."""
 
+from logging import config
+
 from humanoid_walk.config import Config
 from humanoid_walk.controllers.controller import (
     Controller,
@@ -88,9 +90,10 @@ def build_joint_controllers(
     # Comes from humanoid.yaml -> config.humanoid.joint_configs, expanded so
     # hip becomes hip_l and hip_r (see make_body_controller).
     joint_configs: dict[JointName, Config],
-    # Which gain set each joint uses, e.g. {HIP_L: "PD_LEG"}.
-    # Comes from the JointController: section of controller.yaml.
-    controller_types: dict[JointName, str],
+    # Which gain set each joint uses, e.g. {HIP_L: "PD_HIP"}.
+    # Comes from the `joints` lists in the Controller: section of controller.yaml,
+    # inverted to joint -> controller key (see build_joint_controller_names in config.py).
+    controller_names: dict[JointName, str],
     # The named gain sets, e.g. {"PD_LEG": ControllerConfig(type="PD", gains={...})}.
     # Comes from the Controller: section of controller.yaml.
     controller_configs: dict[str, Config],
@@ -98,19 +101,19 @@ def build_joint_controllers(
     """Build one JointController per joint, each with its own controller instance."""
     # Fail early if either YAML section is missing a joint or has an unknown one
     _check_joints(set(joint_configs), "joint_configs")
-    _check_joints(set(controller_types), "controller_types")
+    _check_joints(set(controller_names), "controller_names")
     return {
         # Name refer to the joint, e.g. JointName.HIP_L.
         name: JointController(
             # Limits, max_torque etc. for this joint, from humanoid.yaml
             joint_configs[name],
             # Two lookups into controller.yaml:
-            #   controller_types[name]    -> gain set name for this joint (JointController:)
+            #   controller_names[name]    -> gain set name for this joint (from `joints:` lists)
             #   controller_configs[...]   -> that gain set's type + gains (Controller:)
             # make_controller then reads .type to pick PD/PID/etc. and .gains for Kp/Ki/Kd.
             # Called once per joint, so each joint gets its own instance
             # (matters for the PID integral, which is per-joint state).
-            make_controller(controller_configs[controller_types[name]]),
+            make_controller(controller_configs[controller_names[name]]),
         )
         for name in JointName
     }
@@ -122,9 +125,10 @@ def make_body_controller(
     # humanoid.yaml joints keyed by base name: {"hip": ..., "knee": ..., "neck": ...}
     # Built in app.py from config.humanoid.joint_configs
     joint_cfg_by_base: dict[str, Config],
-    # controller.yaml JointController: section, keyed by plain strings ("hip_l")
-    # From config.joint_controller_types
-    controller_types: dict[str, str],
+    # Joint name (plain string, "hip_l") -> controller key ("PD_HIP"), keyed like the
+    # `joints` lists in controller.yaml
+    # From config.joint_controller_names
+    controller_names: dict[str, str],
     # controller.yaml Controller: section, the named gain sets
     # From config.controllers
     controller_cfgs: dict[str, Config],
@@ -135,5 +139,5 @@ def make_body_controller(
     joint_configs = {name: joint_cfg_by_base[base_name(name)] for name in JointName}
     # YAML keys are plain strings. JointName("hip_l") converts them to the enum and
     # raises ValueError if the YAML names a joint that doesn't exist.
-    types = {JointName(k): v for k, v in controller_types.items()}
-    return BodyController(config, build_joint_controllers(joint_configs, types, controller_cfgs))
+    names = {JointName(k): v for k, v in controller_names.items()}
+    return BodyController(config, build_joint_controllers(joint_configs, names, controller_cfgs))
