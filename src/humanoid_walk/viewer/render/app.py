@@ -9,6 +9,7 @@ from humanoid_walk.controllers.joint_state import JointName
 from humanoid_walk.sim.physics import Simulation
 from humanoid_walk.viewer.ui.joint_panel import JointPanel
 from humanoid_walk.viewer.render.render import Renderer
+from humanoid_walk.controllers.gait import GaitController
 
 COM_COLOUR = (220, 30, 30)
 COM_RADIUS = 6
@@ -37,13 +38,18 @@ class App:
             config.controllers,
         )
 
+        # gait controller for walking
+        self.gait = GaitController(config)
+
         # Manual joint target panel; slider ranges come from humanoid.yaml
         limits = {name: joint_cfg_by_base[base_name(name)].limits for name in JointName}
         self.panel = JointPanel(rendering.screen_width, limits=limits)
-        self.policy = self.panel  # the panel is the policy for now
 
         self.draw_options = pymunk.pygame_util.DrawOptions(self.screen)
         self.renderer = Renderer(self)
+
+        # Default policy
+        self.policy = self.gait
 
     def draw_com(self):
         """Draw a red dot at the whole-body centre of mass."""
@@ -65,6 +71,8 @@ class App:
             # Policy picks targets, then torques are computed, applied and stepped
             self.targets = self.policy.act(self.sim.joint_states())
             self.sim.control_step(self.body, self.targets)
+            if self.policy is self.gait:
+                self.gait.step_clock(1.0 / self.config.world.sim_hz)
 
             self.renderer.update()
 

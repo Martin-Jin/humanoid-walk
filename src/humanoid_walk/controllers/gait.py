@@ -1,45 +1,112 @@
 """Manual gait controller for humanoid walking."""
 
-from attr import dataclass
-from humanoid_walk.controllers.joint_state import JointName, JointStates, JointTargets
 import math
+from dataclasses import dataclass
+
+from humanoid_walk.controllers.joint_state import JointName, JointStates, JointTargets
+from humanoid_walk.config import Config
 
 
-class GaitController:
-    def __init__(self):
-        self.gait: list[Gait] | None = None
+@dataclass(frozen=True)
+class Leg:
+    """The three joints of one leg and its phase offset (fraction of the cycle)."""
 
-    def act(self, joint_states: JointStates) -> JointTargets:
-        """Generate joint targets based on the current gait and time."""
-        if self.gait is None:
-            raise ValueError("Gait not set. Please set a gait before generating targets.")
-
-        joint_targets: JointTargets = {}
-        for gait in self.gait:
-            joint_targets.update(gait(joint_states).targets)
-
-        return joint_targets
-
-    def reset(self):
-        """Reset the gait controller to its initial state."""
-        self.gait = None
-
-
-@dataclass
-class Gait:
-    """A dataclass to hold the gait pattern for walking."""
-
-    joint_state: JointStates  # relevant joints such as hip, knee, ankle
     hip: JointName
     knee: JointName
     ankle: JointName
-    phase: float = 0.0  # Current phase of the gait cycle
+    phase_offset: float
 
-    @property
-    def targets(self) -> JointTargets:
-        """Compute the target angle for a the leg joints."""
-        # TODO
-        return self.targets
+
+class GaitController:
+    """Turns a gait clock into hip, knee and ankle targets for both legs."""
+
+    def __init__(self, config: Config, direction: int = 1):
+        self.config = config
+        self.gait = config.gait
+        self.direction = direction
+        self.time_s = 0.0
+
+        thigh = config.humanoid.leg_length_m / 2
+        self.l1 = thigh
+        self.l2 = thigh
+
+        ankle_cfg = {j.name: j for j in config.humanoid.joint_configs}["ankle"]
+        self.ankle_limits = ankle_cfg.limits
+
+        self.legs = [
+            Leg(
+                JointName.HIP_L,
+                JointName.KNEE_L,
+                JointName.ANKLE_L,
+                self.gait.phase_offsets["left"],
+            ),
+            Leg(
+                JointName.HIP_R,
+                JointName.KNEE_R,
+                JointName.ANKLE_R,
+                self.gait.phase_offsets["right"],
+            ),
+        ]
+
+    def act(self, joint_states: JointStates) -> JointTargets:
+        """Joint targets for the current time."""
+        targets: JointTargets = {
+            JointName.NECK: 0.0,
+            JointName.SHOULDER_L: 0.0,
+            JointName.SHOULDER_R: 0.0,
+        }
+        for leg in self.legs:
+            targets.update(self._leg_targets(leg))
+        return targets
+
+    def reset(self) -> None:
+        """Restart the gait clock."""
+        self.time_s = 0.0
+
+    def step_clock(self, dt: float) -> None:
+        """Advance the gait clock by dt seconds."""
+        self.time_s += dt
+
+    def _leg_targets(self, leg: Leg) -> JointTargets:
+        """Hip, knee and ankle targets for one leg at the current time."""
+        g = self.gait
+        backward = self.direction < 0
+        step_height = g.backward.step_height_m if backward else g.step_height_m
+        offset = g.backward.touchdown_offset_m if backward else g.touchdown_offset_m
+
+        # Compute normalized phase of the leg in the gait cycle, 0.0 -> 1.0, with phase offset applied.
+        phase = (self.time_s / g.period_s + leg.phase_offset) % 1.0
+
+        # 1. Compute foot target (x, y) relative to the hip.
+        x, y = foot_target(
+            phase,
+            g.step_length_m,
+            step_height,
+            g.hip_height_m,
+            g.duty_factor,
+            offset,
+            self.direction,
+        )
+
+        # 2. Compute hip and knee angles from foot target with inverse kinematics.
+        hip, knee = leg_ik(x, y, self.l1, self.l2)
+
+        in_stance = phase < g.duty_factor
+        if in_stance:
+            s = phase / g.duty_factor
+        else:
+            s = (phase - g.duty_factor) / (1.0 - g.duty_factor)
+
+        ankle = ankle_target(
+            hip,
+            knee,
+            in_stance,
+            s,
+            g.ankle.stance_angle,
+            g.ankle.swing_angle,
+            limits=self.ankle_limits,
+        )
+        return {leg.hip: hip, leg.knee: knee, leg.ankle: ankle}
 
 
 def foot_target(
