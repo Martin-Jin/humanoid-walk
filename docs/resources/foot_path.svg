@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 740 475" width="740" role="img" font-family="Helvetica, Arial, sans-serif">
+<title>Foot path in the hip frame</title><desc>Stance is a straight line at hip_height. Swing is an arch of step_height. x is forward, y is down from the hip.</desc>
+<defs><marker id="ad" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="at" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#0F6E56" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="ac" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#993C1D" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect width="740" height="475" fill="#ffffff"/>
+<line x1="360.0" y1="146.0" x2="360.0" y2="395.0" stroke="#999" stroke-width="1" stroke-dasharray="4 4"/>
+<text x="360.0" y="412.0" text-anchor="middle" font-size="12" fill="#666" font-weight="400">x = 0</text>
+<line x1="354.0" y1="140.0" x2="90.0" y2="140.0" stroke="#999" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="210.0" y1="360.0" x2="90.0" y2="360.0" stroke="#999" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="90.0" y1="146.0" x2="90.0" y2="354.0" stroke="#333" stroke-width="1.2" marker-start="url(#ad)" marker-end="url(#ad)"/>
+<text x="100.0" y="255.0" text-anchor="start" font-size="12" fill="#222" font-weight="400">hip_height (H)</text>
+<text x="100.0" y="271.0" text-anchor="start" font-size="11" fill="#888" font-weight="400">not to scale</text>
+<path d="M210.0 360.0 L210.2 355.8 L210.8 351.6 L211.8 347.5 L213.3 343.4 L215.1 339.3 L217.3 335.3 L220.0 331.3 L223.0 327.5 L226.3 323.7 L230.1 320.0 L234.2 316.4 L238.6 313.0 L243.4 309.7 L248.5 306.5 L253.9 303.4 L259.6 300.5 L265.6 297.8 L271.8 295.3 L278.3 292.9 L285.0 290.7 L291.9 288.7 L299.0 286.9 L306.2 285.3 L313.6 283.9 L321.2 282.7 L328.8 281.7 L336.5 281.0 L344.3 280.4 L352.1 280.1 L360.0 280.0 L367.9 280.1 L375.7 280.4 L383.5 281.0 L391.2 281.7 L398.8 282.7 L406.4 283.9 L413.8 285.3 L421.0 286.9 L428.1 288.7 L435.0 290.7 L441.7 292.9 L448.2 295.3 L454.4 297.8 L460.4 300.5 L466.1 303.4 L471.5 306.5 L476.6 309.7 L481.4 313.0 L485.8 316.4 L489.9 320.0 L493.7 323.7 L497.0 327.5 L500.0 331.3 L502.7 335.3 L504.9 339.3 L506.7 343.4 L508.2 347.5 L509.2 351.6 L509.8 355.8 L510.0 360.0" fill="none" stroke="#D85A30" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ac)"/>
+<line x1="510.0" y1="360.0" x2="214.0" y2="360.0" stroke="#1D9E75" stroke-width="2.5" marker-end="url(#at)"/>
+<line x1="360.0" y1="140.0" x2="466.1" y2="303.4" stroke="#888" stroke-width="1.5"/>
+<line x1="360.0" y1="303.4" x2="466.1" y2="303.4" stroke="#D85A30" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="413.0" y="319.4" text-anchor="middle" font-size="12" fill="#993C1D" font-weight="400">x</text>
+<line x1="466.1" y1="140.0" x2="466.1" y2="303.4" stroke="#D85A30" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="474.1" y="221.7" text-anchor="start" font-size="12" fill="#993C1D" font-weight="400">y</text>
+<circle cx="466.1" cy="303.4" r="4.5" fill="#D85A30" stroke="#993C1D" stroke-width="1.5"/>
+<text x="476.1" y="295.4" text-anchor="start" font-size="12" fill="#993C1D" font-weight="400">target (x, y)</text>
+<circle cx="360.0" cy="140.0" r="6" fill="#ddd" stroke="#333" stroke-width="1.5"/>
+<text x="374.0" y="134.0" text-anchor="start" font-size="12" fill="#222" font-weight="500">Hip (origin)</text>
+<circle cx="510.0" cy="360.0" r="4.5" fill="#fff" stroke="#333" stroke-width="1.5"/>
+<circle cx="210.0" cy="360.0" r="4.5" fill="#fff" stroke="#333" stroke-width="1.5"/>
+<text x="516.0" y="336.0" text-anchor="start" font-size="12" fill="#222" font-weight="400">p = 0 ≡ 1</text>
+<text x="516.0" y="350.0" text-anchor="start" font-size="12" fill="#222" font-weight="400">x = +L/2</text>
+<text x="204.0" y="336.0" text-anchor="end" font-size="12" fill="#222" font-weight="400">p = duty_factor</text>
+<text x="204.0" y="350.0" text-anchor="end" font-size="12" fill="#222" font-weight="400">x = −L/2</text>
+<line x1="360.0" y1="280.0" x2="600.0" y2="280.0" stroke="#999" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="510.0" y1="360.0" x2="600.0" y2="360.0" stroke="#999" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="600.0" y1="286.0" x2="600.0" y2="354.0" stroke="#333" stroke-width="1.2" marker-start="url(#ad)" marker-end="url(#ad)"/>
+<text x="612.0" y="324.0" text-anchor="start" font-size="12" fill="#222" font-weight="400">step_height (h)</text>
+<line x1="210.0" y1="364.0" x2="210.0" y2="436.0" stroke="#999" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="510.0" y1="364.0" x2="510.0" y2="436.0" stroke="#999" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="216.0" y1="430.0" x2="504.0" y2="430.0" stroke="#333" stroke-width="1.2" marker-start="url(#ad)" marker-end="url(#ad)"/>
+<text x="360.0" y="452.0" text-anchor="middle" font-size="12" fill="#222" font-weight="400">step_length (L)</text>
+<line x1="520.0" y1="40.0" x2="550.0" y2="40.0" stroke="#1D9E75" stroke-width="2.5"/>
+<text x="558.0" y="44.0" text-anchor="start" font-size="12" fill="#222" font-weight="400">stance (foot on ground)</text>
+<line x1="520.0" y1="60.0" x2="550.0" y2="60.0" stroke="#D85A30" stroke-width="2.5"/>
+<text x="558.0" y="64.0" text-anchor="start" font-size="12" fill="#222" font-weight="400">swing (foot in the air)</text>
+</svg>

@@ -1,0 +1,19 @@
+# Gait parameters. Lengths in m, time in s, angles in rad.
+# Foot position is the ankle target measured from the hip.
+# x: + forward, y: + down (so hip_height_m is a positive y).
+gait:
+  period_s: 1.0 # s, time for one full gait cycle
+  duty_factor: 0.6 # dimensionless (0-1), fraction of the cycle in stance
+  step_length_m: 0.30 # m, total foot travel per step (stance sweep)
+  step_height_m: 0.08 # m, peak foot lift during swing
+  hip_height_m: 0.80 # m, hip-to-ankle distance in stance; must stay below leg_length_m
+  touchdown_offset_m: 0.0 # m, shifts the whole foot path forward (+) / back (-) of the hip
+  ankle: # foot angles relative to the ground, not joint angles
+    stance_angle: 0.0 # rad, foot angle in stance (0 = flat)
+    swing_angle: -0.2 # rad, peak foot angle in swing (negative = toes up)
+  legs:
+    left: { phase_offset: 0.0 } # dimensionless (0-1), fraction of the cycle
+    right: { phase_offset: 0.5 } # dimensionless (0-1), half a cycle behind left
+  backward: # replace the defaults when direction = -1
+    step_height_m: 0.10 # m
+    touchdown_offset_m: -0.03 # m

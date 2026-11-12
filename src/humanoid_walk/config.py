@@ -6,8 +6,10 @@ from typing import Any, Self
 
 import yaml
 
+import math
 from humanoid_walk.utils.paths import CONFIGS_DIR
 from humanoid_walk.controllers.joint_state import JointName
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +106,55 @@ class ControllerConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class AnkleGaitConfig:
+    """Foot angles relative to the ground in rad (+ toes down, - toes up)."""
+
+    stance_angle: float
+    swing_angle: float
+
+
+@dataclass(frozen=True, slots=True)
+class BackwardOverrides:
+    """Values that replace the defaults when walking backward."""
+
+    step_height_m: float
+    touchdown_offset_m: float
+
+
+@dataclass(frozen=True, slots=True)
+class GaitConfig:
+    """Configuration for the foot-trajectory gait."""
+
+    period_s: float
+    duty_factor: float
+    step_length_m: float
+    step_height_m: float
+    hip_height_m: float
+    touchdown_offset_m: float
+    ankle: AnkleGaitConfig
+    phase_offsets: dict[str, float]  # "left" / "right" -> fraction of the cycle
+    backward: BackwardOverrides
+
+    def __post_init__(self):
+        if self.period_s <= 0:
+            raise ValueError(f"period_s must be positive, got {self.period_s}")
+        if not 0.0 < self.duty_factor < 1.0:
+            raise ValueError(f"duty_factor must be between 0 and 1, got {self.duty_factor}")
+        if set(self.phase_offsets) != {"left", "right"}:
+            raise ValueError("gait legs must define exactly 'left' and 'right'")
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> Self:
+        plain = {k: v for k, v in raw.items() if k not in ("ankle", "legs", "backward")}
+        return cls(
+            **plain,
+            ankle=AnkleGaitConfig(**raw["ankle"]),
+            phase_offsets={leg: v["phase_offset"] for leg, v in raw["legs"].items()},
+            backward=BackwardOverrides(**raw["backward"]),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class Config:
     """Configuration for the humanoid walk project."""
 
@@ -114,6 +165,7 @@ class Config:
     joint_controller_names: dict[
         str, str
     ]  # joint name -> key in `controllers`, e.g. "hip_l" -> "PD_HIP"
+    gait: GaitConfig
 
 
 def load_yaml(name: str, directory: Path = CONFIGS_DIR) -> dict[str, Any]:
@@ -144,12 +196,24 @@ def build_joint_controller_names(
     return mapping
 
 
+def validate_gait(gait: GaitConfig, humanoid: HumanoidConfig) -> None:
+    """Reject gaits whose foot path the leg cannot reach."""
+    max_offset = max(abs(gait.touchdown_offset_m), abs(gait.backward.touchdown_offset_m))
+    reach = math.hypot(gait.step_length_m / 2 + max_offset, gait.hip_height_m)
+    if reach >= humanoid.leg_length_m:
+        raise ValueError(
+            f"Gait needs {reach:.3f} m of reach but leg_length_m is {humanoid.leg_length_m}."
+        )
+
+
 def load_config() -> Config:
     humanoid = HumanoidConfig.from_dict(load_yaml("humanoid.yaml"))
     controllers = {
         k: ControllerConfig.from_dict(v)
         for k, v in load_yaml("controller.yaml")["Controller"].items()
     }
+    gait = GaitConfig.from_dict(load_yaml("gait.yaml")["gait"])
+    validate_gait(gait, humanoid)
 
     return Config(
         world=WorldConfig.from_dict(load_yaml("sim.yaml")["world"]),
@@ -159,4 +223,5 @@ def load_config() -> Config:
         joint_controller_names=build_joint_controller_names(
             controllers, {name.value for name in JointName}
         ),
+        gait=gait,
     )
