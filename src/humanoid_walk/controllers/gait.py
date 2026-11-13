@@ -25,12 +25,19 @@ class GaitController:
         self.stand_only = config.gait.stand_only
         self.gait = config.gait
         if self.stand_only:
-            self.gait = replace(self.gait, step_length_m=0.00, step_height_m=0.0)
+            self.gait = replace(
+                self.gait,
+                step_length_m=0.0,
+                step_height_m=0.0,
+                ankle=replace(self.gait.ankle, swing_angle=0.0),
+            )
         self.direction = direction
         self.time_s = 0.0
         # For torso balance control, torso pitch and rate are used to adjust the hip target
         self.torso_pitch = 0.0
         self.torso_rate = 0.0
+        self.com_dx = {JointName.ANKLE_L: 0.0, JointName.ANKLE_R: 0.0}  # COM x minus ankle x (m)
+        self.com_vx = 0.0  # COM x velocity (m/s)
         self.balance_kp = config.gait.hip_balance["kp"]  # rad of hip target per rad of torso lean
         self.balance_kd = config.gait.hip_balance[
             "kd"
@@ -96,6 +103,11 @@ class GaitController:
         self.torso_rate = rate
         # print(f"pitch={self.torso_pitch:.3f} rate={self.torso_rate:.3f}")
 
+    def set_com(self, dx: dict[JointName, float], vx: float) -> None:
+        """Latest COM position relative to each ankle (m, + forward) and COM x velocity (m/s)."""
+        self.com_dx = dx
+        self.com_vx = vx
+
     def _leg_targets(self, leg: Leg) -> JointTargets:
         """Hip, knee and ankle targets for one leg at the current time."""
         g = self.gait
@@ -122,7 +134,7 @@ class GaitController:
         hip = hip_ik
 
         # 3. Stance or swing, and progress through it.
-        in_stance = phase < g.duty_factor
+        in_stance = phase < g.duty_factor or self.stand_only
         if in_stance:
             s = phase / g.duty_factor
         else:
@@ -136,7 +148,7 @@ class GaitController:
         balance = 0.0
         if in_stance and self.ankle_balance:
             balance = (
-                self.ankle_balance_kp * self.torso_pitch + self.ankle_balance_kd * self.torso_rate
+                self.ankle_balance_kp * self.com_dx[leg.ankle] + self.ankle_balance_kd * self.com_vx
             )
 
         ankle = ankle_target(

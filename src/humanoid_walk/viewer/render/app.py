@@ -79,8 +79,11 @@ class App:
                     self.renderer.handle_event(event)
 
             # Policy picks targets, then torques are computed, applied and stepped
-            self.targets = self.policy.act(self.sim.joint_states())
             self.gait.set_torso(self.sim.torso.angle, self.sim.torso.angular_velocity)
+            dx_l, vx = self.sim.com_vs_ankle(JointName.ANKLE_L)
+            dx_r, _ = self.sim.com_vs_ankle(JointName.ANKLE_R)
+            self.gait.set_com({JointName.ANKLE_L: dx_l, JointName.ANKLE_R: dx_r}, vx)
+            self.targets = self.policy.act(self.sim.joint_states())
             print_walk_state(self)
             self.sim.control_step(self.body, self.targets)
 

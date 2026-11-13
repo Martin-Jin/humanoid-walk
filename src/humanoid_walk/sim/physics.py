@@ -310,6 +310,27 @@ class Simulation:
         y = sum(b.mass * b.position.y for b in self.humanoid) / total
         return x, y
 
+    def com_velocity(self) -> tuple[float, float]:
+        """Whole-body centre of mass velocity in world pixels/s (x, y)."""
+        total = sum(b.mass for b in self.humanoid)
+        vx = sum(b.mass * b.velocity.x for b in self.humanoid) / total
+        vy = sum(b.mass * b.velocity.y for b in self.humanoid) / total
+        return vx, vy
+
+    def ankle_world(self, name: JointName) -> tuple[float, float]:
+        """World position in pixels of an ankle pivot (JointName.ANKLE_L or ANKLE_R)."""
+        _, shin = self.joint_bodies[name]
+        shin_half = self.px(self.config.humanoid.leg_length_m / 2) / 2
+        p = shin.local_to_world((0, shin_half))
+        return p.x, p.y
+
+    def com_vs_ankle(self, name: JointName) -> tuple[float, float]:
+        """COM x relative to an ankle (m, + forward) and COM x velocity (m/s)."""
+        cx, _ = self.com_world()
+        ax, _ = self.ankle_world(name)
+        vx, _ = self.com_velocity()
+        return (cx - ax) / self.ppm, vx / self.ppm
+
     def observe(self) -> list[float]:
         """Flat observation vector for all humanoid bodies."""
         obs = []
