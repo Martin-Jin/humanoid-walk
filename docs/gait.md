@@ -162,14 +162,14 @@ The knee bends so the shin swings backward, so the thigh always points forward o
 
 The ankle holds the foot at a chosen angle relative to the ground, whatever the hip and knee are doing.
 
-| Argument         | Symbol    | Unit         | Meaning                                                                      |
-| ---------------- | --------- | ------------ | ---------------------------------------------------------------------------- |
+| Argument         | Symbol    | Unit         | Meaning                                                                        |
+| ---------------- | --------- | ------------ | ------------------------------------------------------------------------------ |
 | `hip`, `knee`    | hip, knee | rad          | Hip is the balance-corrected value (section 7), knee is straight from `leg_ik` |
-| `in_stance`, `s` |           | bool, 0 to 1 | From the same phase split as `foot_target`                                   |
-| `stance_angle`   |           | rad          | Foot angle relative to the ground in stance (0 is flat)                      |
-| `swing_angle`    |           | rad          | Peak foot angle relative to the ground in swing (negative is toes up)        |
-| `torso_pitch`    |           | rad          | Torso angle. `GaitController` does not pass it yet, so it stays 0            |
-| `limits`         |           | rad          | Ankle joint limits from the body config                                      |
+| `in_stance`, `s` |           | bool, 0 to 1 | From the same phase split as `foot_target`                                     |
+| `stance_angle`   |           | rad          | Foot angle relative to the ground in stance (0 is flat)                        |
+| `swing_angle`    |           | rad          | Peak foot angle relative to the ground in swing (negative is toes up)          |
+| `torso_pitch`    |           | rad          | Torso angle. `GaitController` does not pass it yet, so it stays 0              |
+| `limits`         |           | rad          | Ankle joint limits from the body config                                        |
 
 `stance_angle` and `swing_angle` are foot angles relative to the ground, not joint angles.
 
@@ -203,6 +203,40 @@ so `ankle = foot_angle − torso_pitch − hip − knee`.
 
 The default gait needs the ankle between −0.26 and −0.89 rad over the cycle. The body config must therefore allow about 0.9 rad of dorsiflexion. With the original ±0.5 limit the target clamps from late stance through most of swing, leaving the toes pointing down in early swing.
 
+
+### 7.6 Ankle balance (stance only)
+
+The hip term rotates the torso directly. The ankle adds a second correction that acts on the whole body, but only on the leg in stance.
+
+**The balance term** is a correction added to the ankle target, proportional to how far and how fast the torso is tipping:
+
+`balance = ankle_kp · pitch + ankle_kd · rate`
+
+`ankle_target = foot_angle − torso_pitch − hip − knee + balance`
+
+| Symbol             | Source           | Unit        | Meaning                                        | Initial value |
+| ------------------ | ---------------- | ----------- | ---------------------------------------------- | ------------- |
+| `ankle_balance_kp` | `GaitController` | rad/rad     | Ankle target shift per rad of lean             | 0.5           |
+| `ankle_balance_kd` | `GaitController` | rad/(rad/s) | Ankle target shift per rad/s of torso rotation | 0.1           |
+
+`pitch` and `rate` are the same measurements as in 7.1. The gains are untuned starting values. `balance` is passed into `ankle_target` through its `balance` argument. It is 0 when the leg is in swing, so it only changes the target while the foot is planted.
+
+![Ankle balance term, side view](resources/ankle_balance_term_side_view.svg)
+
+**Reading the figure.**
+
+- **Panel 1, torso falls back.** The torso rotates backward about the hip, so `pitch < 0` (the arc), and the body is moving backward (the red arrow). `rate` is negative as well.
+- **Panel 2, stance ankle reacts.** Both measurements are negative, so `balance` is negative. The ankle target moves toes-up (the dashed green line) relative to the shin. The foot stays on the ground, so `PD_ANKLE` produces a toes-up torque that rotates the shin and the body above it forward about the ankle (the green arrow). The heel takes more load as a side effect.
+
+A forward fall flips both signs. `balance` becomes positive, the target moves toes-down, and the body is pushed backward.
+
+**Why stance only.** In swing the foot is free, so the same torque would only move the foot and disturb the swing arch instead of moving the body.
+
+**Limits.**
+
+- The target is clamped to the ankle joint limits. The default gait already needs −0.26 to −0.89 rad of dorsiflexion (section 6), so there is little room left toward toes-up before the clamp.
+- The torque is clamped to the joint's `max_torque`. If the ankle is already saturated, raising the gains does nothing.
+
 ## 7. Torso balance
 
 The foot path alone is open loop: nothing stops the torso pitching forward or backward. A small feedback term on the hip fixes this.
@@ -213,12 +247,12 @@ After `leg_ik`, both legs get the same correction:
 
 `hip_target = hip_ik + kp · pitch + kd · rate`
 
-| Symbol  | Source                  | Unit    | Meaning                                    | Initial value |
-| ------- | ----------------------- | ------- | ------------------------------------------ | ------------- |
-| `pitch` | `sim.torso.angle`       | rad     | Torso angle, + is a forward (clockwise) lean | measured      |
-| `rate`  | `sim.torso.angular_velocity` | rad/s | Torso rotation speed, + is falling forward | measured      |
-| `kp`    | `balance_kp`            | rad/rad | Hip target shift per rad of lean           | 0.8           |
-| `kd`    | `balance_kd`            | rad/(rad/s) | Hip target shift per rad/s of rotation | 0.2           |
+| Symbol  | Source                       | Unit        | Meaning                                      | Initial value |
+| ------- | ---------------------------- | ----------- | -------------------------------------------- | ------------- |
+| `pitch` | `sim.torso.angle`            | rad         | Torso angle, + is a forward (clockwise) lean | measured      |
+| `rate`  | `sim.torso.angular_velocity` | rad/s       | Torso rotation speed, + is falling forward   | measured      |
+| `kp`    | `balance_kp`                 | rad/rad     | Hip target shift per rad of lean             | 0.8           |
+| `kd`    | `balance_kd`                 | rad/(rad/s) | Hip target shift per rad/s of rotation       | 0.2           |
 
 The result is clamped to the hip limits by `JointController.clamp_angle`. The gains are untuned starting values.
 
@@ -263,12 +297,17 @@ Once per frame, in `App.run`:
 
 ### 7.5 Tuning
 
-| Symptom                              | Change                                           |
-| ------------------------------------ | ------------------------------------------------ |
-| Falls faster than without the term   | The sign is wrong. Negate `kp` and `kd`.         |
-| Jitters or vibrates                  | Lower `kd` first.                                |
-| Still leans slowly until it falls    | Raise `kp`.                                      |
-| Hip target pinned at a joint limit   | Lower `kp`, or reduce the lean source (gait speed, `hip_height_m`). |
+| Symptom                                   | Change                                                                                   |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Falls faster than without the term        | The sign is wrong. Negate `kp` and `kd`.                                                 |
+| Jitters or vibrates                       | Lower `kd` first.                                                                        |
+| Still leans slowly until it falls         | Raise `kp`.                                                                              |
+| Hip target pinned at a joint limit        | Lower `kp`, or reduce the lean source (gait speed, `hip_height_m`).                      |
+| Still falls backward, ankle at max torque | The ankle is saturated. Raise the limits or reduce the lean source instead of the gains. |
+| Ankle chatters in stance                  | Lower `ankle_balance_kd`.                                                                |
+| Leans back more with the term on          | The sign is wrong. Negate `ankle_balance_kp` and `ankle_balance_kd`.                     |
+
+
 
 ## 8. Limits and notes
 

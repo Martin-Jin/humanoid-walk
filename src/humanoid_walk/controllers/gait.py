@@ -1,7 +1,7 @@
 """Manual gait controller for humanoid walking."""
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from humanoid_walk.controllers.joint_state import JointName, JointStates, JointTargets
 from humanoid_walk.config import Config
@@ -22,14 +22,22 @@ class GaitController:
 
     def __init__(self, config: Config, direction: int = 1):
         self.config = config
+        self.stand_only = True  # If true, legs are held straight and no gait is applied.
         self.gait = config.gait
+        if self.stand_only:
+            self.gait = replace(self.gait, step_length_m=0.05, step_height_m=0.0)
         self.direction = direction
         self.time_s = 0.0
-        # For balance control, torso pitch and rate are used to adjust the hip target
+        # For torso balance control, torso pitch and rate are used to adjust the hip target
         self.torso_pitch = 0.0
         self.torso_rate = 0.0
         self.balance_kp = 0.8  # rad of hip target per rad of torso lean
         self.balance_kd = 0.2  # rad of hip target per rad/s of torso rotation
+        self.hip_balance = False  # If true, hip targets are adjusted for torso balance.
+        # For ankle control
+        self.ankle_balance_kp = 0.5  # rad of ankle target per rad of torso lean
+        self.ankle_balance_kd = 0.1  # rad of ankle target per rad/s of torso rotation
+        self.ankle_balance = True  # If true, ankle targets are adjusted for torso balance.
 
         thigh = config.humanoid.leg_length_m / 2
         self.l1 = thigh
@@ -76,6 +84,7 @@ class GaitController:
         """Latest torso angle (rad) and angular velocity (rad/s) from the sim."""
         self.torso_pitch = pitch
         self.torso_rate = rate
+        # print(f"pitch={self.torso_pitch:.3f} rate={self.torso_rate:.3f}")
 
     def _leg_targets(self, leg: Leg) -> JointTargets:
         """Hip, knee and ankle targets for one leg at the current time."""
@@ -99,11 +108,18 @@ class GaitController:
         )
 
         # 2. Compute hip and knee angles from foot target with inverse kinematics.
+
+        # Compute hip balance
         hip, knee = leg_ik(x, y, self.l1, self.l2)
-        hip += self.balance_kp * self.torso_pitch + self.balance_kd * self.torso_rate
+        if self.hip_balance:
+            hip += self.balance_kp * self.torso_pitch + self.balance_kd * self.torso_rate
 
         in_stance = phase < g.duty_factor
-        if in_stance:
+        if in_stance and self.ankle_balance:
+            # Compute ankle target with balance adjustment, then compute normalized swing phase s for the ankle.
+            balance = (
+                self.ankle_balance_kp * self.torso_pitch + self.ankle_balance_kd * self.torso_rate
+            )
             s = phase / g.duty_factor
         else:
             s = (phase - g.duty_factor) / (1.0 - g.duty_factor)
@@ -116,6 +132,7 @@ class GaitController:
             g.ankle.stance_angle,
             g.ankle.swing_angle,
             limits=self.ankle_limits,
+            balance=(balance if in_stance and self.ankle_balance else 0.0),
         )
         return {leg.hip: hip, leg.knee: knee, leg.ankle: ankle}
 
@@ -169,8 +186,9 @@ def ankle_target(
     swing_angle: float,
     torso_pitch: float = 0.0,
     limits: tuple[float, float] = (-1.0, 0.5),
+    balance: float = 0.0,
 ) -> float:
     """Ankle joint target in rad (+ toes down, - toes up)."""
     foot = stance_angle if in_stance else swing_angle * math.sin(math.pi * s)
-    ankle = foot - torso_pitch - hip - knee
+    ankle = foot - torso_pitch - hip - knee + balance
     return min(max(ankle, limits[0]), limits[1])

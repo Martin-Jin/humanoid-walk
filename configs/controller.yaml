@@ -19,7 +19,7 @@ Controller:
     type: PD
     gains:
       Kp: 1500.0 # > ~700 N·m/rad of gravity tipping torque
-      Kd: 15.0 # kept low: foot inertia ~0.02 kg·m², Kd·dt/I must stay < 2
+      Kd: 3.0 # kept low: foot inertia ~0.02 kg·m², Kd·dt/I must stay < 2
   PD_HIP: # keeps the torso upright over the legs
     joints: [hip_l, hip_r]
     type: PD
