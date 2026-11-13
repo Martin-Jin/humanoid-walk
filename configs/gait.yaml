@@ -6,7 +6,7 @@ gait:
   duty_factor: 0.6 # dimensionless (0-1), fraction of the cycle in stance
   step_length_m: 0.05 # m, total foot travel per step (stance sweep)
   step_height_m: 0.1 # m, peak foot lift during swing
-  hip_height_m: 0.8 # m, hip-to-ankle distance in stance; must stay below leg_length_m
+  hip_height_m: 0.82 # m, hip-to-ankle distance in stance; must stay below leg_length_m
   touchdown_offset_m: 0.0 # m, shifts the whole foot path forward (+) / back (-) of the hip
   ankle: # foot angles relative to the ground, not joint angles
     stance_angle: 0.0 # rad, foot angle in stance (0 = flat)
@@ -18,9 +18,9 @@ gait:
     step_height_m: 0.10 # m
     touchdown_offset_m: -0.03 # m
   hip_balance: # torso pitch and rate are used to adjust the hip target
-    kp: 0.0 # rad of hip target per rad of torso lean
-    kd: 0.0 # rad of hip target per rad/s of torso rotation
-    enabled: 0.0 # 0 = off, 1 = on, 2 = only when walking backward
+    kp: 0.3 # rad of hip target per rad of torso lean
+    kd: 0.2 # rad of hip target per rad/s of torso rotation
+    enabled: 1.0 # 0 = off, 1 = on, 2 = only when walking backward
   ankle_balance: # torso pitch and rate are used to adjust the ankle target
     kp: 2.0 # rad of ankle target per rad of torso lean
     kd: 0.3 # rad of ankle target per rad/s of torso rotation

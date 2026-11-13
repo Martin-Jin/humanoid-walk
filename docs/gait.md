@@ -237,7 +237,7 @@ A forward fall flips both signs. `balance` becomes positive, the target moves to
 - The target is clamped to the ankle joint limits. The default gait already needs −0.26 to −0.89 rad of dorsiflexion (section 6), so there is little room left toward toes-up before the clamp.
 - The torque is clamped to the joint's `max_torque`. If the ankle is already saturated, raising the gains does nothing.
 
-## 7. Torso balance
+## 7. Torso balance (stance only)
 
 The foot path alone is open loop: nothing stops the torso pitching forward or backward. A small feedback term on the hip fixes this.
 

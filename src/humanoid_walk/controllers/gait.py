@@ -117,32 +117,37 @@ class GaitController:
             self.direction,
         )
 
-        # 2. Compute hip and knee angles from foot target with inverse kinematics.
+        # 2. Hip and knee from IK.
+        hip_ik, knee = leg_ik(x, y, self.l1, self.l2)
+        hip = hip_ik
 
-        # Compute hip balance
-        hip, knee = leg_ik(x, y, self.l1, self.l2)
-        if self.hip_balance:
-            hip += self.balance_kp * self.torso_pitch + self.balance_kd * self.torso_rate
-
+        # 3. Stance or swing, and progress through it.
         in_stance = phase < g.duty_factor
-        if in_stance and self.ankle_balance:
-            # Compute ankle target with balance adjustment, then compute normalized swing phase s for the ankle.
-            balance = (
-                self.ankle_balance_kp * self.torso_pitch + self.ankle_balance_kd * self.torso_rate
-            )
+        if in_stance:
             s = phase / g.duty_factor
         else:
             s = (phase - g.duty_factor) / (1.0 - g.duty_factor)
 
+        # 4. Hip balance, stance only.
+        if self.hip_balance and in_stance:
+            hip += self.balance_kp * self.torso_pitch + self.balance_kd * self.torso_rate
+
+        # 5. Ankle balance, stance only.
+        balance = 0.0
+        if in_stance and self.ankle_balance:
+            balance = (
+                self.ankle_balance_kp * self.torso_pitch + self.ankle_balance_kd * self.torso_rate
+            )
+
         ankle = ankle_target(
-            hip,
+            hip_ik,  # Use decoupled hip for ankle target, so that ankle is not affected by hip balance.
             knee,
             in_stance,
             s,
             g.ankle.stance_angle,
             g.ankle.swing_angle,
             limits=self.ankle_limits,
-            balance=(balance if in_stance and self.ankle_balance else 0.0),
+            balance=balance,
         )
         return {leg.hip: hip, leg.knee: knee, leg.ankle: ankle}
 
