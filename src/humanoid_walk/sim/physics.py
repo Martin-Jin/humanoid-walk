@@ -252,7 +252,11 @@ class Simulation:
         }
         assert set(self.joint_bodies) == set(JointName)
 
-        # Add all joints to space
+        # Hold the torso upright to test propulsion without balance (debug only)
+        if h.pin_torso:
+            self.torso_pin = pymunk.GearJoint(self.space.static_body, self.torso, 0.0, 1.0)
+            self.space.add(self.torso_pin)  # Add all joints to space
+
         self.space.add(
             self.neck,
             self.neck_limit,

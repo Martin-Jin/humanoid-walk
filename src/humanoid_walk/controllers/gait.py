@@ -25,6 +25,11 @@ class GaitController:
         self.gait = config.gait
         self.direction = direction
         self.time_s = 0.0
+        # For balance control, torso pitch and rate are used to adjust the hip target
+        self.torso_pitch = 0.0
+        self.torso_rate = 0.0
+        self.balance_kp = 0.8  # rad of hip target per rad of torso lean
+        self.balance_kd = 0.2  # rad of hip target per rad/s of torso rotation
 
         thigh = config.humanoid.leg_length_m / 2
         self.l1 = thigh
@@ -67,6 +72,11 @@ class GaitController:
         """Advance the gait clock by dt seconds."""
         self.time_s += dt
 
+    def set_torso(self, pitch: float, rate: float) -> None:
+        """Latest torso angle (rad) and angular velocity (rad/s) from the sim."""
+        self.torso_pitch = pitch
+        self.torso_rate = rate
+
     def _leg_targets(self, leg: Leg) -> JointTargets:
         """Hip, knee and ankle targets for one leg at the current time."""
         g = self.gait
@@ -90,6 +100,7 @@ class GaitController:
 
         # 2. Compute hip and knee angles from foot target with inverse kinematics.
         hip, knee = leg_ik(x, y, self.l1, self.l2)
+        hip += self.balance_kp * self.torso_pitch + self.balance_kd * self.torso_rate
 
         in_stance = phase < g.duty_factor
         if in_stance:

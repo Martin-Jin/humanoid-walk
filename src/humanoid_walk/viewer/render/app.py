@@ -7,6 +7,7 @@ from humanoid_walk.config import Config
 from humanoid_walk.controllers.joint_control import base_name, make_body_controller
 from humanoid_walk.controllers.joint_state import JointName
 from humanoid_walk.sim.physics import Simulation
+from humanoid_walk.viewer.render.debug import print_walk_state
 from humanoid_walk.viewer.ui.joint_panel import JointPanel
 from humanoid_walk.viewer.render.render import Renderer
 from humanoid_walk.controllers.gait import GaitController
@@ -25,6 +26,7 @@ class App:
         self.screen = pygame.display.set_mode((rendering.screen_width, rendering.screen_height))
         pygame.display.set_caption("Humanoid Walk Viewer")
         self.clock = pygame.time.Clock()
+        self.frame = 0  # For debugging, to print info every N frames
 
         # Headless physics, then the drawing layer on top of it
         self.sim = Simulation(config)
@@ -70,7 +72,10 @@ class App:
 
             # Policy picks targets, then torques are computed, applied and stepped
             self.targets = self.policy.act(self.sim.joint_states())
+            self.gait.set_torso(self.sim.torso.angle, self.sim.torso.angular_velocity)
+            print_walk_state(self)
             self.sim.control_step(self.body, self.targets)
+
             if self.policy is self.gait:
                 self.gait.step_clock(1.0 / self.config.world.sim_hz)
 

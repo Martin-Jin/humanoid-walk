@@ -12,8 +12,8 @@ Controller:
     joints: [knee_l, knee_r]
     type: PD
     gains:
-      Kp: 250.0 # saturates at ~0.8 rad error for a 200 N·m joint
-      Kd: 25.0
+      Kp: 800.0 # saturates at ~400 N·m of gravity torque on the shins
+      Kd: 40.0
   PD_ANKLE: # holds the whole body upright about the ankle
     joints: [ankle_l, ankle_r]
     type: PD

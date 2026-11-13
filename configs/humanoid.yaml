@@ -11,6 +11,7 @@ torso_length_m: 0.6 # m
 torso_width_m: 0.3 # m
 foot_length_m: 0.25 # m
 foot_width_m: 0.05 # m
+pin_torso: true # If true, torso is pinned upright and cannot rotate. Useful for testing propulsion without balance.
 
 # Mass of each part in kg. Left and right share the same value.
 # Based on standard anthropometric fractions of body mass.
@@ -36,19 +37,19 @@ joint_configs:
     limits: [-1.57, 1.57]
     damping: 0.1
     friction: 0.5
-    max_torque: 200.0
+    max_torque: 300.0
   - name: knee # child = shin, parent = thigh
     # + knee flexes (shin swings backward), 0 = straight leg, no hyperextension
     limits: [0.0, 2.0]
     damping: 0.1
     friction: 0.5
-    max_torque: 200.0
+    max_torque: 2235.0
   - name: ankle # child = foot, parent = shin
     # + toes point down (plantarflexion), - toes point up (dorsiflexion)
-    limits: [-1.0, 0.5]
+    limits: [-0.9, 0.5]
     damping: 0.1
     friction: 0.5
-    max_torque: 120.0
+    max_torque: 170.0
   - name: neck # child = head, parent = torso
     # + head tilts forward (nod), - head tilts back
     limits: [-0.8, 0.8]

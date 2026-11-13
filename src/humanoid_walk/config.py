@@ -59,6 +59,7 @@ class HumanoidConfig:
     torso_length_m: float
     torso_width_m: float
     part_masses_kg: dict[str, float]
+    pin_torso: bool
 
     def __post_init__(self):
         total = (
