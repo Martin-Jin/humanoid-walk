@@ -35,7 +35,9 @@ class GaitController:
         self.balance_kd = config.gait.hip_balance[
             "kd"
         ]  # rad of hip target per rad/s of torso rotation
-        self.hip_balance = False  # If true, hip targets are adjusted for torso balance.
+        self.hip_balance = (
+            config.gait.hip_balance["enabled"] > 0
+        )  # If true, hip targets are adjusted for torso balance.
         # For ankle control
         self.ankle_balance_kp = config.gait.ankle_balance[
             "kp"
@@ -43,7 +45,9 @@ class GaitController:
         self.ankle_balance_kd = config.gait.ankle_balance[
             "kd"
         ]  # rad of ankle target per rad/s of torso rotation
-        self.ankle_balance = True  # If true, ankle targets are adjusted for torso balance.
+        self.ankle_balance = (
+            config.gait.ankle_balance["enabled"] > 0
+        )  # If true, ankle targets are adjusted for torso balance.
 
         thigh = config.humanoid.leg_length_m / 2
         self.l1 = thigh

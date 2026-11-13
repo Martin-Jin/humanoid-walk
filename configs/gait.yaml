@@ -18,9 +18,12 @@ gait:
     step_height_m: 0.10 # m
     touchdown_offset_m: -0.03 # m
   hip_balance: # torso pitch and rate are used to adjust the hip target
-    kp: 0.5 # rad of hip target per rad of torso lean
-    kd: 0.2 # rad of hip target per rad/s of torso rotation
+    kp: 0.0 # rad of hip target per rad of torso lean
+    kd: 0.0 # rad of hip target per rad/s of torso rotation
+    enabled: 0.0 # 0 = off, 1 = on, 2 = only when walking backward
   ankle_balance: # torso pitch and rate are used to adjust the ankle target
     kp: 2.0 # rad of ankle target per rad of torso lean
     kd: 0.3 # rad of ankle target per rad/s of torso rotation
+    enabled: 1.0 # 0 = off, 1 = on, 2 = only when walking backward
   stand_only: False # If true, no walking gait is applied.
+

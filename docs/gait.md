@@ -204,7 +204,7 @@ so `ankle = foot_angle − torso_pitch − hip − knee`.
 The default gait needs the ankle between −0.26 and −0.89 rad over the cycle. The body config must therefore allow about 0.9 rad of dorsiflexion. With the original ±0.5 limit the target clamps from late stance through most of swing, leaving the toes pointing down in early swing.
 
 
-### 7.6 Ankle balance (stance only)
+### Ankle balance (stance only)
 
 The hip term rotates the torso directly. The ankle adds a second correction that acts on the whole body, but only on the leg in stance.
 
