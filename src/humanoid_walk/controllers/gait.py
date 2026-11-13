@@ -22,21 +22,27 @@ class GaitController:
 
     def __init__(self, config: Config, direction: int = 1):
         self.config = config
-        self.stand_only = True  # If true, legs are held straight and no gait is applied.
+        self.stand_only = config.gait.stand_only
         self.gait = config.gait
         if self.stand_only:
-            self.gait = replace(self.gait, step_length_m=0.05, step_height_m=0.0)
+            self.gait = replace(self.gait, step_length_m=0.00, step_height_m=0.0)
         self.direction = direction
         self.time_s = 0.0
         # For torso balance control, torso pitch and rate are used to adjust the hip target
         self.torso_pitch = 0.0
         self.torso_rate = 0.0
-        self.balance_kp = 0.8  # rad of hip target per rad of torso lean
-        self.balance_kd = 0.2  # rad of hip target per rad/s of torso rotation
+        self.balance_kp = config.gait.hip_balance["kp"]  # rad of hip target per rad of torso lean
+        self.balance_kd = config.gait.hip_balance[
+            "kd"
+        ]  # rad of hip target per rad/s of torso rotation
         self.hip_balance = False  # If true, hip targets are adjusted for torso balance.
         # For ankle control
-        self.ankle_balance_kp = 0.5  # rad of ankle target per rad of torso lean
-        self.ankle_balance_kd = 0.1  # rad of ankle target per rad/s of torso rotation
+        self.ankle_balance_kp = config.gait.ankle_balance[
+            "kp"
+        ]  # rad of ankle target per rad of torso lean
+        self.ankle_balance_kd = config.gait.ankle_balance[
+            "kd"
+        ]  # rad of ankle target per rad/s of torso rotation
         self.ankle_balance = True  # If true, ankle targets are adjusted for torso balance.
 
         thigh = config.humanoid.leg_length_m / 2

@@ -135,6 +135,9 @@ class GaitConfig:
     ankle: AnkleGaitConfig
     phase_offsets: dict[str, float]  # "left" / "right" -> fraction of the cycle
     backward: BackwardOverrides
+    ankle_balance: dict[str, float]
+    hip_balance: dict[str, float]
+    stand_only: bool
 
     def __post_init__(self):
         if self.period_s <= 0:
