@@ -21,6 +21,7 @@ class WorldConfig:
     arena_width_m: float
     floor_y_m: float
     floor_friction: float
+    physics_substeps: int
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> Self:

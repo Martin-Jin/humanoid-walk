@@ -29,10 +29,22 @@ class Simulation:
     def __init__(self, config: Config):
         self.config = config
         self.ppm = config.rendering.pixels_per_meter
-        self.space = pymunk.Space()
-        self.space.gravity = (0.0, config.world.gravity_mps2 * self.ppm)
         self.humanoid: list[pymunk.Body] = []
-        self.substeps = 8  # physics steps per frame; torques are recomputed each one
+        self._new_space()
+        self.substeps = (
+            config.world.physics_substeps
+        )  # physics steps per frame; torques are recomputed each one
+        self.spawn_x_frac = 0.2  # humanoid spawns at 20% of screen width
+
+    def _new_space(self):
+        """Create an empty pymunk space with gravity set."""
+        self.space = pymunk.Space()
+        self.space.gravity = (0.0, self.config.world.gravity_mps2 * self.ppm)
+
+    def reset(self):
+        """Discard all bodies and joints and rebuild the humanoid from scratch."""
+        self._new_space()
+        self.setup()
 
     def px(self, meters: float) -> float:
         """Convert meters to pixels."""
@@ -109,7 +121,7 @@ class Simulation:
         ankle_off = self.px(0.03)  # ankle sits 0.03 m behind the foot's centre (0.095 m from heel)
 
         # Spawn position: upright, feet resting on the ground surface
-        tx = r.screen_width / 2
+        tx = r.screen_width * self.spawn_x_frac
         ground_top = r.floor_y_px - self.px(0.025)  # ground segment is 0.05 m thick
         below_torso_centre = torso_half + self.px(h.leg_length_m) + self.px(h.foot_width_m) / 2
         ty = ground_top - below_torso_centre - 1  # 1 px gap, so it settles without dropping

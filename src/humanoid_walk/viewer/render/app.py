@@ -1,5 +1,7 @@
 """The viewer application for the humanoid walk project."""
 
+from humanoid_walk.viewer.ui.button import Button
+
 import pygame
 import pymunk.pygame_util
 
@@ -53,6 +55,9 @@ class App:
         # Default policy
         self.policy = self.gait
 
+        # Reset button
+        self.reset_button = Button((10, 10, 80, 30), "Reset")  # move if it overlaps the joint panel
+
     def draw_com(self):
         """Draw a red dot at the whole-body centre of mass."""
         x, y = self.sim.com_world()
@@ -66,6 +71,9 @@ class App:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                if self.reset_button.clicked(event):
+                    self.reset()
+                    continue
                 # Panel gets first look; the renderer only sees events it didn't consume
                 if not self.panel.handle_event(event):
                     self.renderer.handle_event(event)
@@ -81,11 +89,28 @@ class App:
 
             self.renderer.update()
 
+            # Draw everything
             self.screen.fill((255, 255, 255))  # Clear screen with white
             self.sim.space.debug_draw(self.draw_options)
             self.draw_com()
+            self.reset_button.draw(self.screen)
             self.panel.draw(self.screen)
-            pygame.display.flip()
             self.clock.tick(self.config.world.sim_hz)
+            pygame.display.flip()
 
         pygame.quit()
+
+    def reset(self):
+        """Respawn the humanoid and reset all controller state."""
+        self.sim.reset()
+        joint_cfg_by_base = {j.name: j for j in self.config.humanoid.joint_configs}
+        self.body = make_body_controller(
+            self.config,
+            joint_cfg_by_base,
+            self.config.joint_controller_names,
+            self.config.controllers,
+        )
+        self.gait = GaitController(self.config)
+        self.policy = self.gait
+        self.targets = {}
+        self.frame = 0
