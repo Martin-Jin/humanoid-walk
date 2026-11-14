@@ -1,26 +1,54 @@
-""" "Utility functions for debugging the simulation and rendering."""
+"""Utility functions for debugging the simulation and rendering."""
 
 from humanoid_walk.controllers.joint_state import JointName
 
+PIN_TOL = 0.02  # rad, a target this close to a joint limit is flagged as pinned
+
+
+def _limits(app):
+    cfg = {j.name: j for j in app.config.humanoid.joint_configs}
+    return {name: cfg[name.value.split("_")[0]].limits for name in JointName}
+
 
 def print_walk_state(app):
-    """Print relevant info about walk state such as torques for relevant joints."""
+    """Print gait, balance and joint info every 20 frames."""
     app.frame += 1
-    if app.frame % 20 == 0:
-        states = app.sim.joint_states()
-        torques = app.body.compute_torques(app.targets, states)
-        for name in (JointName.HIP_L, JointName.KNEE_L, JointName.ANKLE_L):
-            print(
-                f"{name.value:8} target {app.targets[name]:+.2f} "
-                f"actual {states[name].current:+.2f} torque {torques[name]:+7.1f}"
-            )
-        print("feet on ground:", app.sim.feet_on_ground(), "\n")
-        ppm = app.sim.ppm
-        print(f"pitch={app.gait.torso_pitch:.2f} rate={app.gait.torso_rate:.2f}")
+    if app.frame % 20:
+        return
+
+    g, sim = app.gait, app.sim
+    ppm = sim.ppm
+    states = sim.joint_states()
+    torques = app.body.compute_torques(app.targets, states)
+    limits = _limits(app)
+    contacts = dict(zip((JointName.ANKLE_L, JointName.ANKLE_R), sim.feet_on_ground()))
+
+    print(
+        f"elapsed {g.elapsed_s:5.2f}  clock {g.time_s:5.2f}  "
+        f"crouch {g.crouch:.2f} walk {g.walk:.2f}  "
+        f"gate {g.gate_scale:.2f}{' PAUSED' if g.paused else ''}"
+    )
+    for leg in g.legs:
+        in_stance, s, standing = g._leg_state(leg)
+        phase = "stand" if standing else ("stance" if in_stance else "swing ")
+        side = leg.hip.value[-1].upper()
         print(
-            f"t {app.gait.time_s:.2f}  "
-            f"torso vx {app.sim.torso.velocity.x / ppm:+.2f} m/s  "
-            f"foot_l vx {app.sim.foot_l.velocity.x / ppm:+.2f}  "
-            f"foot_r vx {app.sim.foot_r.velocity.x / ppm:+.2f}"
+            f" {side} {phase} s={s:.2f}  "
+            f"ground={contacts[leg.ankle]!s:5}  "
+            f"com_dx={g.com_dx[leg.ankle]:+.3f} m"
         )
-        print(app.sim.com_vs_ankle(JointName.ANKLE_L))
+        for joint in (leg.hip, leg.knee, leg.ankle):
+            lo, hi = limits[joint]
+            tgt = app.targets[joint]
+            pin = " PINNED" if tgt <= lo + PIN_TOL or tgt >= hi - PIN_TOL else ""
+            print(
+                f"    {joint.value:8} target {tgt:+.2f} "
+                f"actual {states[joint].current:+.2f} "
+                f"torque {torques[joint]:+7.1f}{pin}"
+            )
+    print(
+        f" torso pitch {g.torso_pitch:+.2f} rate {g.torso_rate:+.2f}  "
+        f"vx {sim.torso.velocity.x / ppm:+.2f} m/s  "
+        f"com_vx {g.com_vx:+.2f} m/s  com_h {g.com_height:.2f} m"
+    )
+    print()

@@ -2,12 +2,12 @@
 # Lengths in m, mass in kg, angles in rad, torque in N·m.
 mass_kg: 75.0 # kg, total body mass (must equal the sum of part_masses_kg)
 height_m: 1.8 # m
-head_radius_m: 0.1 # m
-leg_length_m: 0.85 # m, thigh + shin combined (each is half)
-leg_width_m: 0.1 # m
+head_radius_m: 0.15 # m
+leg_length_m: 0.91 # m, thigh + shin combined (each is half)
+leg_width_m: 0.125 # m
 arm_length_m: 0.7 # m
 arm_width_m: 0.1 # m
-torso_length_m: 0.6 # m
+torso_length_m: 0.7 # m
 torso_width_m: 0.3 # m
 foot_length_m: 0.25 # m
 foot_width_m: 0.08 # m

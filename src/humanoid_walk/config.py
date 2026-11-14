@@ -133,6 +133,8 @@ class GaitConfig:
     step_height_m: float
     hip_height_m: float
     touchdown_offset_m: float
+    max_leg_ratio: float  # commanded leg never longer than this x leg_length_m
+    balance_blend: float  # fraction of stance over which balance terms fade in/out
     ankle: AnkleGaitConfig
     phase_offsets: dict[str, float]  # "left" / "right" -> fraction of the cycle
     backward: BackwardOverrides
@@ -142,6 +144,8 @@ class GaitConfig:
     arm: dict[str, float]  # arm swing parameters
     balance_gate: dict[str, float]  # thresholds for pausing/resuming the gait clock
     start_up: dict[str, float]  # startup sequence durations in seconds
+    push_off: dict[str, float]  # late-stance leg extension and ankle plantarflexion
+    touchdown: dict[str, float]  # closed-loop touchdown (contact-seeking reach, clock hold)
 
     def __post_init__(self):
         if self.period_s <= 0:
@@ -205,13 +209,46 @@ def build_joint_controller_names(
 
 
 def validate_gait(gait: GaitConfig, humanoid: HumanoidConfig) -> None:
-    """Reject gaits whose foot path the leg cannot reach."""
+    """Reject gaits whose foot path the leg cannot reach, and out-of-range gait settings."""
+    leg = humanoid.leg_length_m
+    limit = gait.max_leg_ratio * leg  # longest leg the controller will command
+    td = gait.touchdown
+    push = gait.push_off
+
+    # Reach: worst-case foot position relative to the hip
     max_offset = max(abs(gait.touchdown_offset_m), abs(gait.backward.touchdown_offset_m))
-    reach = math.hypot(gait.step_length_m / 2 + max_offset, gait.hip_height_m)
-    if reach >= humanoid.leg_length_m:
+    drop = gait.hip_height_m + push["extend_m"] + td["reach_max_m"]
+    reach_x = gait.step_length_m / 2 + max_offset + push["back_m"]
+    reach = math.hypot(reach_x, drop)
+
+    if drop > limit:
         raise ValueError(
-            f"Gait needs {reach:.3f} m of reach but leg_length_m is {humanoid.leg_length_m}."
+            f"hip_height_m + extend_m + reach_max_m = {drop:.3f} m exceeds "
+            f"max_leg_ratio * leg_length_m = {limit:.3f} m."
         )
+    if reach >= limit:
+        raise ValueError(
+            f"Gait needs {reach:.3f} m of reach but the limit is {limit:.3f} m "
+            f"({gait.max_leg_ratio} x leg_length_m of {leg})."
+        )
+
+    # Range checks on the new parameters
+    if not 0.0 < gait.max_leg_ratio < 1.0:
+        raise ValueError("max_leg_ratio must be between 0 and 1.")
+    if not 0.0 < gait.duty_factor < 1.0:
+        raise ValueError("duty_factor must be between 0 and 1.")
+    if not 0.0 <= gait.balance_blend <= 0.5:
+        raise ValueError("balance_blend must be between 0 and 0.5.")
+    if not 0.0 <= push["start"] < 1.0:
+        raise ValueError("push_off.start must be in [0, 1).")
+    if not 0.0 <= td["landing_start"] < 1.0:
+        raise ValueError("touchdown.landing_start must be in [0, 1).")
+    if not td["reach_start"] < td["hold_from"] <= 1.0:
+        raise ValueError("touchdown needs reach_start < hold_from <= 1.")
+    if td["reach_max_m"] < 0 or td["reach_rate_mps"] < 0:
+        raise ValueError("touchdown.reach_max_m and reach_rate_mps must be >= 0.")
+    if td["reach_decay_s"] <= 0 or td["hold_max_s"] < 0:
+        raise ValueError("touchdown.reach_decay_s must be > 0 and hold_max_s >= 0.")
 
 
 def load_config() -> Config:

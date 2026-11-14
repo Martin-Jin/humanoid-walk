@@ -9,7 +9,7 @@
 # Each joint (one per JointName value) must appear in exactly one `joints` list.
 Controller:
   PD_LEG: # knee
-    joints: [knee_l, knee_r]
+    joints: []
     type: PD
     gains:
       Kp: 800.0 # saturates at ~400 N·m of gravity torque on the shins
@@ -18,7 +18,7 @@ Controller:
     joints: [ankle_l, ankle_r]
     type: PD
     gains:
-      Kp: 1500.0 # > ~700 N·m/rad of gravity tipping torque
+      Kp: 1200.0 # > ~700 N·m/rad of gravity tipping torque
       Kd: 3.0 # kept low: foot inertia ~0.02 kg·m², Kd·dt/I must stay < 2
   PD_HIP: # keeps the torso upright over the legs
     joints: [hip_l, hip_r]
@@ -38,12 +38,12 @@ Controller:
     gains:
       Kp: 20.0
       Kd: 1.0
-  PID_LEG: # like PD_LEG, plus Ki to remove steady gravity sag (currently unassigned)
-    joints: []
+  PID_LEG:
+    joints: [knee_l, knee_r]
     type: PID
     gains:
-      Kp: 250.0
-      Ki: 20.0
-      Kd: 25.0
-      integral_limit: 5.0 # Ki · limit = 100 N·m max integral contribution
+      Kp: 800.0
+      Ki: 300.0
+      Kd: 40.0
+      integral_limit: 0.5 # Ki * limit = 150 N·m max integral contribution
 

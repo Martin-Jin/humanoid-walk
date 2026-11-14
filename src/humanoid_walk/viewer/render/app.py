@@ -88,6 +88,7 @@ class App:
                 self.sim.com_height_above_ankle(JointName.ANKLE_R),
             )
             self.gait.set_com({JointName.ANKLE_L: dx_l, JointName.ANKLE_R: dx_r}, vx, height)
+            self.gait.set_contacts(*self.sim.feet_on_ground())
             self.targets = self.policy.act(self.sim.joint_states())
             print_walk_state(self)
             self.sim.control_step(self.body, self.targets)
