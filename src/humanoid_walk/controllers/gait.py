@@ -56,9 +56,8 @@ class GaitController:
             config.gait.ankle_balance["enabled"] > 0
         )  # If true, ankle targets are adjusted for torso balance.
 
-        thigh = config.humanoid.leg_length_m / 2
-        self.l1 = thigh
-        self.l2 = thigh
+        # Set up the legs and their lengths. The leg length is used for inverse kinematics.
+        self.thigh = config.humanoid.leg_length_m / 2
 
         ankle_cfg = {j.name: j for j in config.humanoid.joint_configs}["ankle"]
         self.ankle_limits = ankle_cfg.limits
@@ -109,113 +108,65 @@ class GaitController:
         self.com_vx = vx
 
     def _leg_targets(self, leg: Leg) -> JointTargets:
-        """Hip, knee and ankle targets for one leg at the current time."""
+        """Calculate the hip, knee and ankle targets for one leg."""
         g = self.gait
         backward = self.direction < 0
         step_height = g.backward.step_height_m if backward else g.step_height_m
         offset = g.backward.touchdown_offset_m if backward else g.touchdown_offset_m
 
-        # Compute normalized phase of the leg in the gait cycle, 0.0 -> 1.0, with phase offset applied.
         phase = (self.time_s / g.period_s + leg.phase_offset) % 1.0
-
-        # 1. Compute foot target (x, y) relative to the hip.
-        x, y = foot_target(
-            phase,
-            g.step_length_m,
-            step_height,
-            g.hip_height_m,
-            g.duty_factor,
-            offset,
-            self.direction,
-        )
-
-        # 2. Hip and knee from IK.
-        hip_ik, knee = leg_ik(x, y, self.l1, self.l2)
-        hip = hip_ik
-
-        # 3. Stance or swing, and progress through it.
         in_stance = phase < g.duty_factor or self.stand_only
         if in_stance:
             s = phase / g.duty_factor
         else:
             s = (phase - g.duty_factor) / (1.0 - g.duty_factor)
 
-        # 4. Hip balance, stance only.
-        if self.hip_balance and in_stance:
-            hip += self.balance_kp * self.torso_pitch + self.balance_kd * self.torso_rate
+        x, y = self._foot_target(in_stance, s, step_height, offset)
+        hip_ik, knee = self._leg_ik(x, y)
+        hip = hip_ik
 
-        # 5. Ankle balance, stance only.
         balance = 0.0
-        if in_stance and self.ankle_balance:
-            balance = (
-                self.ankle_balance_kp * self.com_dx[leg.ankle] + self.ankle_balance_kd * self.com_vx
-            )
+        if in_stance:
+            if self.hip_balance:
+                hip += self.balance_kp * self.torso_pitch + self.balance_kd * self.torso_rate
+            if self.ankle_balance:
+                balance = (
+                    self.ankle_balance_kp * self.com_dx[leg.ankle]
+                    + self.ankle_balance_kd * self.com_vx
+                )
 
-        ankle = ankle_target(
-            hip_ik,  # Use decoupled hip for ankle target, so that ankle is not affected by hip balance.
-            knee,
-            in_stance,
-            s,
-            g.ankle.stance_angle,
-            g.ankle.swing_angle,
-            limits=self.ankle_limits,
-            balance=balance,
-        )
+        # Decoupled hip (hip_ik) so the ankle isn't affected by hip balance.
+        ankle = self._ankle_target(hip_ik, knee, in_stance, s, balance)
         return {leg.hip: hip, leg.knee: knee, leg.ankle: ankle}
 
+    def _foot_target(
+        self, in_stance: bool, s: float, step_height: float, touchdown_offset: float
+    ) -> tuple[float, float]:
+        """Foot (x, y) relative to the hip, in m. x: + forward, y: + down."""
+        g = self.gait
+        half = g.step_length_m / 2.0
+        if in_stance:  # foot moves backward relative to the hip
+            x = half - g.step_length_m * s
+            y = g.hip_height_m
+        else:  # foot moves forward and lifts
+            x = -half * math.cos(math.pi * s)
+            y = g.hip_height_m - step_height * math.sin(math.pi * s)
+        return self.direction * x + touchdown_offset, y
 
-def foot_target(
-    phase: float,
-    step_length: float,
-    step_height: float,
-    hip_height: float,
-    duty_factor: float,
-    touchdown_offset: float = 0.0,
-    direction: int = 1,
-) -> tuple[float, float]:
-    """Foot (x, y) relative to the hip, in m. x: + forward, y: + down."""
-    p = phase % 1.0
-    half = step_length / 2.0
+    def _leg_ik(self, x: float, y: float) -> tuple[float, float]:
+        """Return (hip, knee) in rad for a foot target (x forward, y down) from the hip."""
+        eps = 1e-6
+        d = min(max(math.hypot(x, y), eps), 2 * self.thigh - eps)  # clamp to reachable range
+        alpha = math.acos(d / (2 * self.thigh))  # equal link lengths
+        hip = -(math.atan2(x, y) + alpha)  # + hip = leg swings backward
+        knee = 2 * alpha  # + knee = flexion, 0 = straight
+        return hip, knee
 
-    if p < duty_factor:  # stance: foot moves backward relative to the hip
-        s = p / duty_factor  # 0 -> 1
-        x = half - step_length * s
-        y = hip_height
-    else:  # swing: foot moves forward and lifts
-        s = (p - duty_factor) / (1.0 - duty_factor)  # 0 -> 1
-        x = -half + step_length * 0.5 * (1.0 - math.cos(math.pi * s))
-        y = hip_height - step_height * math.sin(math.pi * s)
-
-    return direction * x + touchdown_offset, y
-
-
-def leg_ik(x: float, y: float, l1: float, l2: float) -> tuple[float, float]:
-    """Return (hip, knee) in rad for a foot target (x forward, y down) from the hip."""
-    eps = 1e-6
-    d = math.hypot(x, y)
-    d = min(max(d, abs(l1 - l2) + eps), l1 + l2 - eps)  # clamp to reachable range
-
-    phi = math.atan2(x, y)  # direction to foot, from straight down, + forward
-    alpha = math.acos((l1**2 + d**2 - l2**2) / (2 * l1 * d))
-    inner = math.acos((l1**2 + l2**2 - d**2) / (2 * l1 * l2))
-
-    hip = -(phi + alpha)  # config: + hip = leg swings backward
-    knee = math.pi - inner  # config: + knee = flexion, 0 = straight
-    return hip, knee
-
-
-def ankle_target(
-    hip: float,
-    knee: float,
-    in_stance: bool,
-    s: float,
-    stance_angle: float,
-    swing_angle: float,
-    torso_pitch: float = 0.0,
-    limits: tuple[float, float] = (-1.0, 0.5),
-    balance: float = 0.0,
-) -> float:
-    """Ankle joint target in rad (+ toes down, - toes up)."""
-    foot = stance_angle if in_stance else swing_angle * math.sin(math.pi * s)
-    ankle = foot - torso_pitch - hip - knee + balance
-    return min(max(ankle, limits[0]), limits[1])
+    def _ankle_target(
+        self, hip: float, knee: float, in_stance: bool, s: float, balance: float = 0.0
+    ) -> float:
+        """Ankle joint target in rad (+ toes down, - toes up)."""
+        a = self.gait.ankle
+        foot = a.stance_angle if in_stance else a.swing_angle * math.sin(math.pi * s)
+        lo, hi = self.ankle_limits
+        return min(max(foot - hip - knee + balance, lo), hi)

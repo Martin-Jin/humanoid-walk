@@ -2,18 +2,18 @@ import math
 import unittest
 
 from humanoid_walk.config import load_config
-from humanoid_walk.controllers.gait import GaitController, foot_target, leg_ik
+from humanoid_walk.controllers.gait import GaitController, _foot_target, _leg_ik
 from humanoid_walk.controllers.joint_state import JointName
 
 
 class GaitTests(unittest.TestCase):
     def test_ik_matches_docs_table(self):
-        hip, knee = leg_ik(0.15, 0.80, 0.45, 0.45)
+        hip, knee = _leg_ik(0.15, 0.80, 0.45, 0.45)
         self.assertAlmostEqual(hip, -0.626, places=3)
         self.assertAlmostEqual(knee, 0.882, places=3)
 
     def test_foot_target_stance_start(self):
-        x, y = foot_target(0.0, 0.30, 0.08, 0.80, 0.6)
+        x, y = _foot_target(0.0, 0.30, 0.08, 0.80, 0.6)
         self.assertAlmostEqual(x, 0.15)
         self.assertAlmostEqual(y, 0.80)
 
