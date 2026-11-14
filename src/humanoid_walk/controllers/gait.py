@@ -27,6 +27,12 @@ class Leg:
     phase_offset: float
 
 
+def _ramp(t: float, start: float, duration: float) -> float:
+    """Smooth 0 to 1 ramp beginning at `start` and lasting `duration` seconds."""
+    x = min(max((t - start) / max(duration, 1e-6), 0.0), 1.0)
+    return x * x * (3.0 - 2.0 * x)
+
+
 class GaitController:
     """Turns a gait clock into hip, knee and ankle targets for both legs."""
 
@@ -41,16 +47,26 @@ class GaitController:
                 step_height_m=0.0,
                 ankle=replace(self.gait.ankle, swing_angle=0.0),
             )
-        # For arm swing
+        # Startup: stand straight, crouch to walking height, then ramp up the walk
+        self.stand_s = config.gait.start_up["stand_s"]
+        self.crouch_s = config.gait.start_up["crouch_s"]
+        self.ramp_s = config.gait.start_up["ramp_s"]
+        self.leg_length = config.humanoid.leg_length_m
+        self.elapsed_s = 0.0  # time since start, always runs (the gait clock starts later)
+        self.crouch = 0.0  # 0 = straight legs, 1 = walking hip height
+        self.walk = 0.0  # 0 = no stepping, 1 = full gait
+        # Arm swing parameters: enabled and amplitude (rad, peak shoulder angle)
         self.arm_enabled = config.gait.arm["enabled"] > 0 and not self.stand_only
         self.arm_amplitude = config.gait.arm["amplitude"]  # rad, peak shoulder angle
         self.direction = direction
         self.time_s = 0.0
-        # For torso balance control, torso pitch and rate are used to adjust the hip target
+        # Torso and COM state for balance control
         self.torso_pitch = 0.0
         self.torso_rate = 0.0
         self.com_dx = {JointName.ANKLE_L: 0.0, JointName.ANKLE_R: 0.0}  # COM x minus ankle x (m)
         self.com_vx = 0.0  # COM x velocity (m/s)
+
+        # Joint controller gains for balance. These are used to adjust the hip and ankle targets based on torso lean and rotation.
         self.balance_kp = config.gait.hip_balance["kp"]  # rad of hip target per rad of torso lean
         self.balance_kd = config.gait.hip_balance[
             "kd"
@@ -68,6 +84,16 @@ class GaitController:
         self.ankle_balance = (
             config.gait.ankle_balance["enabled"] > 0
         )  # If true, ankle targets are adjusted for torso balance.
+
+        # Set up COM height and balance gate thresholds for stopping/resuming walking.
+        self.com_height = config.gait.hip_height_m
+        self.gate_enabled = config.gait.balance_gate["enabled"] > 0
+        self.gate_stop = config.gait.balance_gate["stop_margin"]
+        self.gate_resume = config.gait.balance_gate["resume_margin"]
+        # Foot extent either side of the ankle: the ankle sits 0.03 m behind the foot centre
+        self.heel = config.humanoid.foot_length_m / 2 - 0.03
+        self.toe = config.humanoid.foot_length_m / 2 + 0.03
+        self.paused = False
 
         # Set up the legs and their lengths. The leg length is used for inverse kinematics.
         self.thigh = config.humanoid.leg_length_m / 2
@@ -97,6 +123,7 @@ class GaitController:
 
     def act(self, joint_states: JointStates) -> JointTargets:
         """Get Joint targets for the current time."""
+        self.crouch, self.walk = self._startup()
         targets: JointTargets = {
             JointName.NECK: 0.0,
         }
@@ -107,11 +134,27 @@ class GaitController:
         return targets
 
     def reset(self) -> None:
-        """Restart the gait clock."""
+        """Restart the startup sequence and the gait clock."""
+        self.elapsed_s = 0.0
         self.time_s = 0.0
+        self.paused = False
+
+    def _startup(self) -> tuple[float, float]:
+        """Blend factors (crouch, walk), each 0 to 1, from the time since start."""
+        t = self.elapsed_s
+        crouch = _ramp(t, self.stand_s, self.crouch_s)
+        walk = _ramp(t, self.stand_s + self.crouch_s, self.ramp_s)
+        return crouch, walk
 
     def step_clock(self, dt: float) -> None:
-        """Advance the gait clock by dt seconds."""
+        """Advance the startup timer, and the gait clock once walking has begun."""
+        self.elapsed_s += dt
+        if self.elapsed_s <= self.stand_s + self.crouch_s:
+            return  # still standing and crouching, gait clock stays at 0
+        if self.gate_enabled:
+            self._update_gate()
+            if self.paused and self._both_in_stance():
+                return  # hold the phase, balance terms keep running
         self.time_s += dt
 
     def set_torso(self, pitch: float, rate: float) -> None:
@@ -120,20 +163,53 @@ class GaitController:
         self.torso_rate = rate
         # print(f"pitch={self.torso_pitch:.3f} rate={self.torso_rate:.3f}")
 
-    def set_com(self, dx: dict[JointName, float], vx: float) -> None:
-        """Latest COM position relative to each ankle (m, + forward) and COM x velocity (m/s)."""
+    def set_com(self, dx: dict[JointName, float], vx: float, height: float) -> None:
+        """Latest COM x relative to each ankle (m, + forward), COM x velocity (m/s) and COM height above the ankle (m)."""
         self.com_dx = dx
         self.com_vx = vx
+        self.com_height = height
+
+    def _stance_legs(self) -> list[Leg]:
+        """Legs currently in stance."""
+        g = self.gait
+        return [
+            leg
+            for leg in self.legs
+            if (self.time_s / g.period_s + leg.phase_offset) % 1.0 < g.duty_factor
+        ]
+
+    def _update_gate(self) -> None:
+        """Pause the gait clock when the capture point nears the edge of the support area."""
+        stance = self._stance_legs()
+        if not stance:
+            return
+        omega = math.sqrt(9.81 / max(self.com_height, 0.1))
+        cp = self.com_vx / omega  # capture point relative to the COM (m)
+        ankles = [-self.com_dx[leg.ankle] for leg in stance]  # stance ankle x relative to the COM
+        rear = min(ankles) - self.heel
+        front = max(ankles) + self.toe
+        margin = min(cp - rear, front - cp)  # distance to the nearest edge, negative if outside
+        limit = self.gate_resume if self.paused else self.gate_stop
+        self.paused = margin < limit
+        print(f"margin={margin:.3f} paused={self.paused}")
+
+    def _both_in_stance(self) -> bool:
+        g = self.gait
+        return all(
+            ((self.time_s / g.period_s + leg.phase_offset) % 1.0) < g.duty_factor
+            for leg in self.legs
+        )
 
     def _leg_targets(self, leg: Leg) -> JointTargets:
         """Calculate the hip, knee and ankle targets for one leg."""
         g = self.gait
         backward = self.direction < 0
-        step_height = g.backward.step_height_m if backward else g.step_height_m
+        step_height = (g.backward.step_height_m if backward else g.step_height_m) * self.walk
         offset = g.backward.touchdown_offset_m if backward else g.touchdown_offset_m
 
         phase = (self.time_s / g.period_s + leg.phase_offset) % 1.0
-        in_stance = phase < g.duty_factor or self.stand_only
+        standing = self.stand_only or self.elapsed_s <= self.stand_s + self.crouch_s
+        in_stance = phase < g.duty_factor or standing
         if in_stance:
             s = phase / g.duty_factor
         else:
@@ -162,13 +238,15 @@ class GaitController:
     ) -> tuple[float, float]:
         """Foot (x, y) relative to the hip, in m. x: + forward, y: + down."""
         g = self.gait
-        half = g.step_length_m / 2.0
+        length = g.step_length_m * self.walk
+        hip_h = self.leg_length - self.crouch * (self.leg_length - g.hip_height_m)
+        half = length / 2.0
         if in_stance:  # foot moves backward relative to the hip
-            x = half - g.step_length_m * s
-            y = g.hip_height_m
+            x = half - length * s
+            y = hip_h
         else:  # foot moves forward and lifts
             x = -half * math.cos(math.pi * s)
-            y = g.hip_height_m - step_height * math.sin(math.pi * s)
+            y = hip_h - step_height * math.sin(math.pi * s)
         return self.direction * x + touchdown_offset, y
 
     def _leg_ik(self, x: float, y: float) -> tuple[float, float]:
@@ -185,7 +263,7 @@ class GaitController:
     ) -> float:
         """Ankle joint target in rad (+ toes down, - toes up)."""
         a = self.gait.ankle
-        foot = a.stance_angle if in_stance else a.swing_angle * math.sin(math.pi * s)
+        foot = a.stance_angle if in_stance else a.swing_angle * self.walk * math.sin(math.pi * s)
         lo, hi = self.ankle_limits
         return min(max(foot - hip - knee + balance, lo), hi)
 
@@ -194,5 +272,5 @@ class GaitController:
         if not self.arm_enabled:
             return {arm.shoulder: 0.0}
         phase = (self.time_s / self.gait.period_s + arm.phase_offset) % 1.0
-        swing = -self.direction * self.arm_amplitude * math.cos(2 * math.pi * phase)
+        swing = -self.direction * self.arm_amplitude * self.walk * math.cos(2 * math.pi * phase)
         return {arm.shoulder: swing}

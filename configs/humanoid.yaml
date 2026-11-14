@@ -46,7 +46,7 @@ joint_configs:
     max_torque: 200.0
   - name: ankle # child = foot, parent = shin
     # + toes point down (plantarflexion), - toes point up (dorsiflexion)
-    limits: [-0.9, 0.5]
+    limits: [-0.6, 0.5]
     damping: 0.1
     friction: 0.5
     max_torque: 200.0

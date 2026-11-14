@@ -2,10 +2,10 @@
 # Foot position is the ankle target measured from the hip.
 # x: + forward, y: + down (so hip_height_m is a positive y).
 gait:
-  period_s: 1.0 # s, time for one full gait cycle
+  period_s: 0.8 # s, time for one full gait cycle
   duty_factor: 0.6 # dimensionless (0-1), fraction of the cycle in stance
   step_length_m: 0.2 # m, total foot travel per step (stance sweep)
-  step_height_m: 0.12 # m, peak foot lift during swing
+  step_height_m: 0.10 # m, peak foot lift during swing
   hip_height_m: 0.82 # m, hip-to-ankle distance in stance; must stay below leg_length_m
   touchdown_offset_m: 0.0 # m, shifts the whole foot path forward (+) / back (-) of the hip
   ankle: # foot angles relative to the ground, not joint angles
@@ -28,4 +28,12 @@ gait:
   stand_only: False # If true, no walking gait is applied.
   arm:
     enabled: 1.0 # 0 = off, 1 = on
-    amplitude: 0.6 # rad, peak arm swing angle
+    amplitude: 0.8 # rad, peak arm swing angle
+  balance_gate: # thresholds for pausing/resuming the gait clock
+    enabled: 1.0 # 0 = off, 1 = on
+    stop_margin: 0.02 # m, if the capture point is beyond this from the ankle, pause the gait clock
+    resume_margin: 0.05 # m, if the capture point is within this from the ankle, resume the gait clock
+  start_up: # ramp up the gait from 0 to full over a few seconds
+    stand_s: 1.0 # s, hold straight legs
+    crouch_s: 1.0 # s, lower to hip_height_m
+    ramp_s: 2.0 # s, ramp step length, height, swing angle and arm swing from 0 to full

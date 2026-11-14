@@ -331,6 +331,12 @@ class Simulation:
         vx, _ = self.com_velocity()
         return (cx - ax) / self.ppm, vx / self.ppm
 
+    def com_height_above_ankle(self, name: JointName) -> float:
+        """Vertical distance (m) from an ankle pivot up to the whole-body COM."""
+        _, cy = self.com_world()
+        _, ay = self.ankle_world(name)
+        return (ay - cy) / self.ppm  # y is down, so the ankle has the larger y
+
     def observe(self) -> list[float]:
         """Flat observation vector for all humanoid bodies."""
         obs = []

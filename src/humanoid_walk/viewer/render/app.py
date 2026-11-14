@@ -80,9 +80,14 @@ class App:
 
             # Policy picks targets, then torques are computed, applied and stepped
             self.gait.set_torso(self.sim.torso.angle, self.sim.torso.angular_velocity)
+            # COM position and velocity relative to each ankle, for gait balance control
             dx_l, vx = self.sim.com_vs_ankle(JointName.ANKLE_L)
             dx_r, _ = self.sim.com_vs_ankle(JointName.ANKLE_R)
-            self.gait.set_com({JointName.ANKLE_L: dx_l, JointName.ANKLE_R: dx_r}, vx)
+            height = max(
+                self.sim.com_height_above_ankle(JointName.ANKLE_L),
+                self.sim.com_height_above_ankle(JointName.ANKLE_R),
+            )
+            self.gait.set_com({JointName.ANKLE_L: dx_l, JointName.ANKLE_R: dx_r}, vx, height)
             self.targets = self.policy.act(self.sim.joint_states())
             print_walk_state(self)
             self.sim.control_step(self.body, self.targets)

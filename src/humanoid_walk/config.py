@@ -140,6 +140,8 @@ class GaitConfig:
     hip_balance: dict[str, float]
     stand_only: bool
     arm: dict[str, float]  # arm swing parameters
+    balance_gate: dict[str, float]  # thresholds for pausing/resuming the gait clock
+    start_up: dict[str, float]  # startup sequence durations in seconds
 
     def __post_init__(self):
         if self.period_s <= 0:
