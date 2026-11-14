@@ -1,7 +1,8 @@
-# Gait: foot trajectory and torso balance
+# Gait: foot trajectory, balance and arm swing
 
-How the gait controller turns a **phase** into a **foot target**, then into joint targets, and how torso feedback keeps the body upright. The foot target is converted to hip and knee angles by inverse kinematics (see `controllers.md`).
-See `gait.py` in `/controllers` for `foot_target` (section 4), `leg_ik` (section 5), `ankle_target` (section 6) and the balance term in `GaitController._leg_targets` (section 7).
+How the gait controller turns a **phase** into a **foot target**, then into joint targets, how feedback keeps the body upright, and how the arms swing. The foot target is converted to hip and knee angles by inverse kinematics (see `controllers.md`).
+
+See `gait.py` in `/controllers` for `_foot_target` (section 4), `_leg_ik` (section 5), `_ankle_target` (section 6), the balance terms in `GaitController._leg_targets` (sections 6 and 7) and `_arm_target` (section 8).
 
 Figures live in `resources/`. Mermaid diagrams render in VS Code with a Mermaid preview extension and on GitHub.
 
@@ -10,40 +11,52 @@ Figures live in `resources/`. Mermaid diagrams render in VS Code with a Mermaid 
 ```mermaid
 flowchart LR
     T["time t"] --> P["leg phase p<br/>(t / period_s + phase_offset) mod 1"]
-    P --> F["foot_target()<br/>foot (x, y) from hip"]
-    F --> IK["two-link IK<br/>hip and knee angles"]
-    IK --> B["balance feedback<br/>hip += kp·pitch + kd·rate"]
-    S["sim: torso angle<br/>and angular velocity"] --> B
-    B --> A["ankle target<br/>foot angle − hip − knee"]
-    IK --> A
-    B --> PD["joint PD controllers<br/>torque"]
+    P --> F["_foot_target()<br/>foot (x, y) from hip"]
+    F --> IK["_leg_ik()<br/>hip_ik and knee"]
+    IK --> HB["hip balance (stance only)<br/>hip = hip_ik + kp·pitch + kd·rate"]
+    S["sim: torso angle<br/>and angular velocity"] --> HB
+    C["sim: COM position and<br/>velocity vs ankle"] --> AB["ankle balance (stance only)<br/>kp·com_dx + kd·com_vx"]
+    IK --> A["_ankle_target()<br/>foot angle − hip_ik − knee + balance"]
+    AB --> A
+    HB --> PD["joint PD controllers<br/>torque"]
     IK --> PD
     A --> PD
+    P --> AR["_arm_target()<br/>opposite-leg phase"]
+    AR --> PD
 ```
 
-Each leg has its own phase `p` in `[0, 1)`. One full cycle is `period_s` seconds. The right leg uses `phase_offset = 0.5`, so it runs half a cycle behind the left.
+Each leg has its own phase `p` in `[0, 1)`. One full cycle is `period_s` seconds. The right leg runs behind the left by its `phase_offset`.
 
 ![Left and right leg phase over one period](resources/phase_timeline.svg)
 
-With `duty_factor = 0.6` both feet are on the ground for 0.1 of the cycle twice per period (double support). In general it is `2 · (duty_factor − 0.5)` of the cycle when the offset is 0.5.
+With a leg offset of 0.5, both feet are on the ground for `duty_factor − 0.5` of the cycle twice per period (double support, total `2 · (duty_factor − 0.5)`).
 
 ## 2. Parameters
 
-Every parameter used by `foot_target`, with the matching key in the gait YAML.
+Every parameter used by the gait controller, with the matching key in the gait YAML. Values live in the YAML only.
 
-| Argument           | Symbol | Unit     | Meaning                                                  | YAML key                                |
-| ------------------ | ------ | -------- | -------------------------------------------------------- | --------------------------------------- |
-| `phase`            | p      | 0 to 1   | Position in the gait cycle, wrapped with `mod 1`         | derived from `period_s`, `phase_offset` |
-| `step_length`      | L      | m        | Total foot travel from the front of stance to the back   | `step_length_m`                         |
-| `step_height`      | h      | m        | Peak foot lift during swing                              | `step_height_m`                         |
-| `hip_height`       | H      | m        | Hip-to-ankle distance while the foot is on the ground    | `hip_height_m`                          |
-| `duty_factor`      | duty   | 0 to 1   | Fraction of the cycle spent in stance                    | `duty_factor`                           |
-| `touchdown_offset` | o      | m        | Shifts the whole path forward (+) or back (−) of the hip | `touchdown_offset_m`                    |
-| `direction`        | d      | +1 or −1 | +1 walks forward, −1 mirrors the path to walk backward   | command, not config                     |
+| Argument           | Symbol | Unit     | Meaning                                                          | YAML key                                |
+| ------------------ | ------ | -------- | ---------------------------------------------------------------- | --------------------------------------- |
+| `phase`            | p      | 0 to 1   | Position in the gait cycle, wrapped with `mod 1`                 | derived from `period_s`, `phase_offset` |
+| `period_s`         | T      | s        | Time for one full gait cycle                                     | `period_s`                              |
+| `step_length`      | L      | m        | Total foot travel from the front of stance to the back           | `step_length_m`                         |
+| `step_height`      | h      | m        | Peak foot lift during swing                                      | `step_height_m`                         |
+| `hip_height`       | H      | m        | Hip-to-ankle distance while the foot is on the ground            | `hip_height_m`                          |
+| `duty_factor`      | duty   | 0 to 1   | Fraction of the cycle spent in stance                            | `duty_factor`                           |
+| `touchdown_offset` | o      | m        | Shifts the whole path forward (+) or back (−) of the hip         | `touchdown_offset_m`                    |
+| `phase_offset`     |        | 0 to 1   | Per-leg offset as a fraction of the cycle                        | `legs.left/right.phase_offset`          |
+| `stance_angle`     |        | rad      | Foot angle relative to the ground in stance                      | `ankle.stance_angle`                    |
+| `swing_angle`      |        | rad      | Peak foot angle relative to the ground in swing                  | `ankle.swing_angle`                     |
+| hip balance        |        |          | `kp`, `kd`, `enabled`                                            | `hip_balance`                           |
+| ankle balance      |        |          | `kp`, `kd`, `enabled`                                            | `ankle_balance`                         |
+| arm                |        |          | `amplitude`, `enabled`                                           | `arm`                                   |
+| backward overrides |        |          | `step_height_m`, `touchdown_offset_m` used when walking backward | `backward`                              |
+| `stand_only`       |        | bool     | If true, no walking gait is applied                              | `stand_only`                            |
+| `direction`        | d      | +1 or −1 | +1 walks forward, −1 mirrors the path to walk backward           | command, not config                     |
 
-Derived inside the function: `half = L / 2` (m) and `s` (0 to 1, progress through the current sub-phase).
+Derived inside the functions: `half = L / 2` (m) and `s` (0 to 1, progress through the current sub-phase).
 
-Balance gains (section 7) are attributes of `GaitController`, not YAML keys yet.
+**Stand only.** When `stand_only` is set, the constructor zeroes `step_length_m`, `step_height_m`, `ankle.swing_angle` and `arm.amplitude`, and every leg is treated as in stance. The feet hold a fixed pose under the hip.
 
 ## 3. Coordinate frame
 
@@ -53,8 +66,8 @@ The output `(x, y)` is the **ankle target relative to the hip**, in metres. `x` 
 
 Reading the figure:
 
-- Stance is the straight green line at `y = H`. It runs from `x = +L/2` (phase 0) to `x = −L/2` (phase `duty_factor`).
-- Swing is the orange arch. It runs from `x = −L/2` back to `x = +L/2`, rising by at most `h`, so `y` dips to `H − h`.
+- Stance is the straight line at `y = H`. It runs from `x = +L/2` (phase 0) to `x = −L/2` (phase `duty_factor`).
+- Swing is the arch. It runs from `x = −L/2` back to `x = +L/2`, rising by at most `h`, so `y` dips to `H − h`.
 - The `(x, y)` marked on the arch is exactly what the function returns for that phase.
 
 ## 4. Deriving the function
@@ -64,7 +77,7 @@ flowchart TD
     S["phase p"] --> W["p = p mod 1"]
     W --> Q{"is p below duty_factor?"}
     Q -- yes --> ST["Stance<br/>s = p / duty_factor<br/>x = L/2 − L·s<br/>y = H"]
-    Q -- no --> SW["Swing<br/>s = (p − duty_factor) / (1 − duty_factor)<br/>x = −L/2 + L·½(1 − cos πs)<br/>y = H − h·sin(πs)"]
+    Q -- no --> SW["Swing<br/>s = (p − duty_factor) / (1 − duty_factor)<br/>x = −L/2·cos(πs)<br/>y = H − h·sin(πs)"]
     ST --> O["x_out = direction·x + touchdown_offset"]
     SW --> O
     O --> R["return (x_out, y)"]
@@ -74,7 +87,7 @@ flowchart TD
 
 **Step 1: wrap the phase.** `p = phase mod 1` keeps `p` in `[0, 1)`, so any phase value, including a growing clock, is valid.
 
-**Step 2: choose stance or swing.** Stance if `p < duty_factor`, otherwise swing. This sets how long the foot is on the ground.
+**Step 2: choose stance or swing.** Stance if `p < duty_factor` (or `stand_only`), otherwise swing. This sets how long the foot is on the ground.
 
 **Step 3: normalise to `s`.** Inside each sub-phase, `s` runs from 0 to 1 so the same formulas work for any duty factor.
 
@@ -85,13 +98,13 @@ flowchart TD
 
 `x = L/2 − L·s`, `y = H`
 
-Check: `s = 0` gives `+L/2`, `s = ½` gives `0`, `s = 1` gives `−L/2`. The foot speed relative to the hip is `L / (duty_factor · period_s)`, which equals the walking speed (0.5 m/s with the default config).
+Check: `s = 0` gives `+L/2`, `s = ½` gives `0`, `s = 1` gives `−L/2`. The foot speed relative to the hip is `L / (duty_factor · T)`, which equals the walking speed.
 
-**Step 5: swing x.** The foot must go from `−L/2` to `+L/2`. A linear sweep would start and stop abruptly, which slaps the foot and jerks the joints. Use the cosine ease instead:
+**Step 5: swing x.** The foot must go from `−L/2` to `+L/2`. A linear sweep would start and stop abruptly, which slaps the foot and jerks the joints. Use a cosine ease instead:
 
-`e(s) = ½(1 − cos πs)`, so `x = −L/2 + L·e(s)`
+`x = −(L/2) · cos(πs)`
 
-`e(0) = 0`, `e(1) = 1` and its slope `e'(s) = (π/2)·sin πs` is 0 at both ends. The foot therefore leaves and lands with zero forward speed.
+At `s = 0` this is `−L/2`, at `s = 1` it is `+L/2`, and its slope `(L/2)·π·sin(πs)` is 0 at both ends. The foot therefore leaves and lands with zero forward speed.
 
 **Step 6: swing y.** The foot must lift and return to the ground. `sin(πs)` is 0 at both ends and 1 at `s = ½`, so `lift = h·sin(πs)`. Because `y` points down, the lift is subtracted:
 
@@ -99,11 +112,11 @@ Check: `s = 0` gives `+L/2`, `s = ½` gives `0`, `s = 1` gives `−L/2`. The foo
 
 ![Easing and lift functions](resources/easing.svg)
 
-**Step 7: direction and offset.** The final x is
+**Step 7: direction, offset and backward overrides.** The final x is
 
 `x_out = direction · x + touchdown_offset`
 
-`direction = −1` mirrors the sweep about the hip, so stance now moves the foot toward `+x` and pushes the body backward. `touchdown_offset` is added after the mirror, so it shifts the path in the hip frame regardless of direction.
+`direction = −1` mirrors the sweep about the hip, so stance now moves the foot toward `+x` and pushes the body backward. `touchdown_offset` is added after the mirror, so it shifts the path in the hip frame regardless of direction. When `direction = −1`, `backward.step_height_m` and `backward.touchdown_offset_m` replace the forward values.
 
 ![Effect of direction and touchdown_offset](resources/direction_offset.svg)
 
@@ -111,150 +124,127 @@ Check: `s = 0` gives `+L/2`, `s = ½` gives `0`, `s = 1` gives `−L/2`. The foo
 
 ## 5. Inverse kinematics
 
-`foot_target` returns where the ankle should be. `leg_ik` converts that into the hip and knee angles the joint controllers track.
+`_foot_target` returns where the ankle should be. `_leg_ik` converts that into the hip and knee angles the joint controllers track.
 
-| Argument | Symbol | Unit | Meaning                                 |
-| -------- | ------ | ---- | --------------------------------------- |
-| `x`      | x      | m    | Ankle target, + forward of the hip      |
-| `y`      | y      | m    | Ankle target, + down from the hip       |
-| `l1`     | l1     | m    | Thigh length, `leg_length_m / 2` (0.45) |
-| `l2`     | l2     | m    | Shin length, `leg_length_m / 2` (0.45)  |
+| Argument | Symbol | Unit | Meaning                                        |
+| -------- | ------ | ---- | ---------------------------------------------- |
+| `x`      | x      | m    | Ankle target, + forward of the hip             |
+| `y`      | y      | m    | Ankle target, + down from the hip              |
+| `l`      | l      | m    | Thigh and shin length, both `leg_length_m / 2` |
 
 Returns `hip` and `knee` in rad, using the joint conventions in the body config: + hip swings the leg backward, + knee flexes the shin backward, and 0 knee is a straight leg.
 
 ![Two-link leg geometry](resources/ik_geometry.svg)
 
-The figure uses the touchdown target (x = 0.15, y = 0.80). Thigh `l1`, shin `l2` and the hip-to-ankle line `d` form a triangle. `φ` is the angle from straight down to `d`, `α` is the angle at the hip between `d` and the thigh, and `inner` is the angle at the knee. The hip target is `−(φ + α)` and the knee target is `π − inner`, which are the values in the checks table below.
+Thigh, shin and the hip-to-ankle line `d` form a triangle. `φ` is the angle from straight down to `d`, `α` is the angle at the hip between `d` and the thigh, and `inner` is the angle at the knee.
 
-**Step 1: distance to the foot.** `d = sqrt(x² + y²)`. Clamp it to `[|l1 − l2| + ε, l1 + l2 − ε]` so the target is always reachable and `acos` never receives a value outside [−1, 1].
+**Step 1: distance to the foot.** `d = sqrt(x² + y²)`. Clamp it to `[ε, 2l − ε]` so the target is always reachable and `acos` never receives a value outside [−1, 1].
 
-**Step 2: knee.** The hip, knee and ankle form a triangle with sides `l1`, `l2` and `d`. The law of cosines gives the inner angle at the knee:
+**Step 2: hip-to-thigh angle.** The thigh and shin are equal, so the triangle is isosceles and the two base angles are equal:
 
-`cos(inner) = (l1² + l2² − d²) / (2·l1·l2)`
+`α = acos(d / 2l)`
 
-The config measures knee flexion from a straight leg, so `knee = π − inner`. A straight leg (`d = l1 + l2`) gives `inner = π` and `knee = 0`.
+**Step 3: knee.** The inner angle at the knee is `π − 2α`. The config measures knee flexion from a straight leg, so:
 
-**Step 3: hip.** Two angles add up, both measured from straight down:
+`knee = π − inner = 2α`
+
+A straight leg (`d = 2l`) gives `α = 0` and `knee = 0`.
+
+**Step 4: hip.** Two angles add up, both measured from straight down:
 
 - `φ = atan2(x, y)` is the direction from the hip to the foot, positive when the foot is forward.
-- `α` is the angle at the hip between the thigh and that hip-to-foot line. The law of cosines gives `cos(α) = (l1² + d² − l2²) / (2·l1·d)`.
+- `α` is the angle at the hip between the thigh and that hip-to-foot line.
 
 The knee bends so the shin swings backward, so the thigh always points forward of the hip-to-foot line by `α`. The thigh is therefore `φ + α` forward of vertical. The config counts forward as negative, so:
 
 `hip = −(φ + α)`
 
-**Checks** (`l1 = l2 = 0.45`):
-
-| Foot target (x, y) | hip (rad) | knee (rad) | Meaning                          |
-| ------------------ | --------- | ---------- | -------------------------------- |
-| (0, 0.90)          | −0.001    | 0.003      | straight leg, fully extended     |
-| (+0.15, 0.80)      | −0.626    | 0.882      | touchdown, thigh forward         |
-| (0, 0.80)          | −0.476    | 0.952      | mid stance                       |
-| (−0.15, 0.80)      | −0.256    | 0.882      | end of stance, thigh moving back |
-| (0, 0.72)          | −0.644    | 1.287      | peak of swing, knee flexed most  |
-
 **Notes.**
 
-- Two solutions exist for any reachable target (knee bent forward or backward). The formulas above always give a non-negative knee, which is the human-style solution.
-- These values assume an upright torso. Torso lean is handled by the balance term in section 7, which is applied after `leg_ik`.
+- Two solutions exist for any reachable target (knee bent forward or backward). The formulas always give a non-negative knee, which is the human-style solution.
+- The result assumes an upright torso. Torso lean is handled by the balance terms (sections 6 and 7), which are applied after `_leg_ik`.
 
 ## 6. Ankle target
 
 The ankle holds the foot at a chosen angle relative to the ground, whatever the hip and knee are doing.
 
-| Argument         | Symbol    | Unit         | Meaning                                                                        |
-| ---------------- | --------- | ------------ | ------------------------------------------------------------------------------ |
-| `hip`, `knee`    | hip, knee | rad          | Hip is the balance-corrected value (section 7), knee is straight from `leg_ik` |
-| `in_stance`, `s` |           | bool, 0 to 1 | From the same phase split as `foot_target`                                     |
-| `stance_angle`   |           | rad          | Foot angle relative to the ground in stance (0 is flat)                        |
-| `swing_angle`    |           | rad          | Peak foot angle relative to the ground in swing (negative is toes up)          |
-| `torso_pitch`    |           | rad          | Torso angle. `GaitController` does not pass it yet, so it stays 0              |
-| `limits`         |           | rad          | Ankle joint limits from the body config                                        |
+| Argument         | Unit         | Meaning                                                                          |
+| ---------------- | ------------ | -------------------------------------------------------------------------------- |
+| `hip`, `knee`    | rad          | `hip_ik` (without the hip balance term) and `knee`, both straight from `_leg_ik` |
+| `in_stance`, `s` | bool, 0 to 1 | From the same phase split as `_foot_target`                                      |
+| `balance`        | rad          | Ankle balance correction, 0 in swing                                             |
+| `stance_angle`   | rad          | Foot angle relative to the ground in stance (0 is flat)                          |
+| `swing_angle`    | rad          | Peak foot angle relative to the ground in swing (negative is toes up)            |
+| `limits`         | rad          | Ankle joint limits from the body config                                          |
 
 `stance_angle` and `swing_angle` are foot angles relative to the ground, not joint angles.
 
 ![Foot angle chain and ankle needed over the cycle](resources/ankle_target.svg)
 
-The top diagram shows the sum down the chain at mid swing. The plot shows the foot target (blue) and the ankle joint angle needed to hit it (orange). The orange curve dips to about −0.89 rad in swing, which is why the dorsiflexion limit has to be wider than ±0.5.
-
 **Step 1: foot angle target.**
 
 - Stance: `stance_angle`.
-- Swing: `swing_angle · sin(πs)`. This is 0 at lift-off, toes-up `swing_angle` at mid swing, and 0 at touchdown, so the target has no jump at either join and the foot lands flat.
+- Swing: `swing_angle · sin(πs)`. This is 0 at lift-off, `swing_angle` at mid swing, and 0 at touchdown, so the target has no jump at either join and the foot lands flat.
 
-**Step 2: solve for the ankle.** Every joint angle is child minus parent, and positive turns the child clockwise on screen. The foot's world angle is therefore the sum down the chain:
+**Step 2: solve for the ankle.** Every joint angle is child minus parent, and positive turns the child clockwise on screen. The foot's angle is the sum down the chain:
 
-`foot_angle = torso_pitch + hip + knee + ankle`
+`foot_angle = hip + knee + ankle`
 
-so `ankle = foot_angle − torso_pitch − hip − knee`.
+so `ankle = foot_angle − hip − knee + balance`.
+
+The torso angle is not part of this sum: the controller works in the hip frame and corrects for torso lean through the balance terms instead.
 
 **Step 3: clamp** the result to the ankle joint limits.
 
-**Checks** (default gait, `swing_angle = −0.2`, no balance correction):
+The body config's dorsiflexion limit must be wide enough for the knee flexion the gait needs. More knee flexion (a higher `step_height_m` or a lower `hip_height_m`) needs more dorsiflexion, otherwise the target clamps and the toes may drag in early swing.
 
-| p   | Phase       | hip    | knee  | foot target | ankle needed |
-| --- | ----------- | ------ | ----- | ----------- | ------------ |
-| 0.0 | touchdown   | −0.626 | 0.882 | 0           | −0.256       |
-| 0.3 | mid stance  | −0.476 | 0.952 | 0           | −0.476       |
-| 0.6 | lift-off    | −0.256 | 0.882 | 0           | −0.626       |
-| 0.7 | early swing | −0.442 | 1.168 | −0.141      | −0.867       |
-| 0.8 | mid swing   | −0.644 | 1.287 | −0.200      | −0.844       |
-| 0.9 | late swing  | −0.725 | 1.168 | −0.141      | −0.583       |
+### 6.1 Ankle balance (stance only)
 
-The default gait needs the ankle between −0.26 and −0.89 rad over the cycle. The body config must therefore allow about 0.9 rad of dorsiflexion. With the original ±0.5 limit the target clamps from late stance through most of swing, leaving the toes pointing down in early swing.
+The hip term rotates the torso directly. The ankle adds a second correction that acts on the whole body, but only on the leg in stance. It uses the COM position and velocity relative to the planted ankle, not the torso angle.
 
+`balance = ankle_kp · com_dx + ankle_kd · com_vx`
 
-### Ankle balance (stance only)
+| Symbol             | Source                  | Unit      | Meaning                                             |
+| ------------------ | ----------------------- | --------- | --------------------------------------------------- |
+| `com_dx`           | `set_com` (per ankle)   | m         | COM x minus that ankle's x, + when the COM is ahead |
+| `com_vx`           | `set_com`               | m/s       | COM x velocity, + when moving forward               |
+| `ankle_balance_kp` | `gait.ankle_balance.kp` | rad/m     | Ankle target shift per m of COM offset              |
+| `ankle_balance_kd` | `gait.ankle_balance.kd` | rad/(m/s) | Ankle target shift per m/s of COM velocity          |
 
-The hip term rotates the torso directly. The ankle adds a second correction that acts on the whole body, but only on the leg in stance.
-
-**The balance term** is a correction added to the ankle target, proportional to how far and how fast the torso is tipping:
-
-`balance = ankle_kp · pitch + ankle_kd · rate`
-
-`ankle_target = foot_angle − torso_pitch − hip − knee + balance`
-
-| Symbol             | Source           | Unit        | Meaning                                        | Initial value |
-| ------------------ | ---------------- | ----------- | ---------------------------------------------- | ------------- |
-| `ankle_balance_kp` | `GaitController` | rad/rad     | Ankle target shift per rad of lean             | 0.5           |
-| `ankle_balance_kd` | `GaitController` | rad/(rad/s) | Ankle target shift per rad/s of torso rotation | 0.1           |
-
-`pitch` and `rate` are the same measurements as in 7.1. The gains are untuned starting values. `balance` is passed into `ankle_target` through its `balance` argument. It is 0 when the leg is in swing, so it only changes the target while the foot is planted.
+`balance` is passed into `_ankle_target`. It is 0 when the leg is in swing, so it only changes the target while the foot is planted. The ankle uses `hip_ik` rather than the balance-corrected hip, so hip balance does not leak into the ankle.
 
 ![Ankle balance term, side view](resources/ankle_balance_term_side_view.svg)
 
-**Reading the figure.**
+**Reading the figure.** Forward is right. The dashed outline is the ankle target and the grey foot is the actual foot.
 
-- **Panel 1, torso falls back.** The torso rotates backward about the hip, so `pitch < 0` (the arc), and the body is moving backward (the red arrow). `rate` is negative as well.
-- **Panel 2, stance ankle reacts.** Both measurements are negative, so `balance` is negative. The ankle target moves toes-up (the dashed green line) relative to the shin. The foot stays on the ground, so `PD_ANKLE` produces a toes-up torque that rotates the shin and the body above it forward about the ankle (the green arrow). The heel takes more load as a side effect.
-
-A forward fall flips both signs. `balance` becomes positive, the target moves toes-down, and the body is pushed backward.
+- **Panel 1, COM ahead.** `com_dx` and `com_vx` are positive, so `balance` is positive and the target moves toes-down. The foot is planted, so the ankle torque on the foot (clockwise) is matched by the opposite torque on the shin. This rotates the shin and the body above it backward, which brings the COM back over the ankle.
+- **Panel 2, COM behind.** Both measurements are negative, so `balance` is negative and the target moves toes-up. The shin and body are pushed forward.
 
 **Why stance only.** In swing the foot is free, so the same torque would only move the foot and disturb the swing arch instead of moving the body.
 
 **Limits.**
 
-- The target is clamped to the ankle joint limits. The default gait already needs −0.26 to −0.89 rad of dorsiflexion (section 6), so there is little room left toward toes-up before the clamp.
+- The target is clamped to the ankle joint limits. If the gait already uses most of the dorsiflexion range, there is little room left toward toes-up before the clamp.
 - The torque is clamped to the joint's `max_torque`. If the ankle is already saturated, raising the gains does nothing.
 
-## 7. Torso balance (stance only)
+## 7. Torso balance (hip, stance only)
 
-The foot path alone is open loop: nothing stops the torso pitching forward or backward. A small feedback term on the hip fixes this.
+The foot path alone is open loop: nothing stops the torso pitching forward or backward. A feedback term on the hip fixes this.
 
 ### 7.1 The law
 
-After `leg_ik`, both legs get the same correction:
+After `_leg_ik`, each leg **in stance** gets the correction:
 
 `hip_target = hip_ik + kp · pitch + kd · rate`
 
-| Symbol  | Source                       | Unit        | Meaning                                      | Initial value |
-| ------- | ---------------------------- | ----------- | -------------------------------------------- | ------------- |
-| `pitch` | `sim.torso.angle`            | rad         | Torso angle, + is a forward (clockwise) lean | measured      |
-| `rate`  | `sim.torso.angular_velocity` | rad/s       | Torso rotation speed, + is falling forward   | measured      |
-| `kp`    | `balance_kp`                 | rad/rad     | Hip target shift per rad of lean             | 0.8           |
-| `kd`    | `balance_kd`                 | rad/(rad/s) | Hip target shift per rad/s of rotation       | 0.2           |
+| Symbol  | Source                       | Unit        | Meaning                                      |
+| ------- | ---------------------------- | ----------- | -------------------------------------------- |
+| `pitch` | `sim.torso.angle`            | rad         | Torso angle, + is a forward (clockwise) lean |
+| `rate`  | `sim.torso.angular_velocity` | rad/s       | Torso rotation speed, + is falling forward   |
+| `kp`    | `balance_kp`                 | rad/rad     | Hip target shift per rad of lean             |
+| `kd`    | `balance_kd`                 | rad/(rad/s) | Hip target shift per rad/s of rotation       |
 
-The result is clamped to the hip limits by `JointController.clamp_angle`. The gains are untuned starting values.
+The gains come from `gait.hip_balance` in the YAML. The result is clamped to the hip limits by `JointController.clamp_angle`.
 
 ![Measured lean and the torque pair that corrects it](resources/balance_geometry.svg)
 
@@ -269,13 +259,13 @@ The result is clamped to the hip limits by `JointController.clamp_angle`. The ga
 
 The `kd · rate` term acts early: it reacts to the speed of the lean before the angle has grown, and it damps the overshoot that `kp` alone would cause.
 
-During swing the leg is light and free, so the same correction moves the leg more than the torso. Balance is mainly effective in stance.
+The correction is applied in stance only. In swing the leg is light and free, so the same torque would move the leg more than the torso.
 
 ```mermaid
 flowchart LR
     SIM["Simulation<br/>torso.angle, torso.angular_velocity"] --> ST["set_torso(pitch, rate)"]
     ST --> C["correction<br/>kp·pitch + kd·rate"]
-    C --> H["hip target<br/>hip_ik + correction"]
+    C --> H["hip target (stance)<br/>hip_ik + correction"]
     H --> PD["hip PD controller<br/>+τ thigh, −τ torso"]
     PD --> SIM
 ```
@@ -291,29 +281,56 @@ Each term is a straight line through zero.
 Once per frame, in `App.run`:
 
 1. `gait.set_torso(sim.torso.angle, sim.torso.angular_velocity)` stores the latest lean.
-2. `policy.act(...)` computes targets. `_leg_targets` adds the correction right after `leg_ik`.
-3. `control_step` runs 8 substeps with those targets held constant.
-4. `gait.step_clock(1 / sim_hz)` advances the gait phase.
+2. `gait.set_com(dx, vx)` stores the COM position relative to each ankle and the COM velocity.
+3. `policy.act(...)` computes targets. `_leg_targets` adds the hip correction right after `_leg_ik` and passes the ankle correction into `_ankle_target`.
+4. `control_step` runs several substeps with those targets held constant.
+5. `gait.step_clock(1 / sim_hz)` advances the gait phase.
 
-### 7.5 Tuning
+## 8. Arm control
 
-| Symptom                                   | Change                                                                                   |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Falls faster than without the term        | The sign is wrong. Negate `kp` and `kd`.                                                 |
-| Jitters or vibrates                       | Lower `kd` first.                                                                        |
-| Still leans slowly until it falls         | Raise `kp`.                                                                              |
-| Hip target pinned at a joint limit        | Lower `kp`, or reduce the lean source (gait speed, `hip_height_m`).                      |
-| Still falls backward, ankle at max torque | The ankle is saturated. Raise the limits or reduce the lean source instead of the gains. |
-| Ankle chatters in stance                  | Lower `ankle_balance_kd`.                                                                |
-| Leans back more with the term on          | The sign is wrong. Negate `ankle_balance_kp` and `ankle_balance_kd`.                     |
+The arms swing to counter the angular momentum of the legs. They are open loop: no torso or COM feedback is applied. Each arm runs half a cycle out of phase with the same-side leg, so it moves in the opposite direction.
 
+### 8.1 The law
 
+`arm_phase = (t / T + arm.phase_offset) mod 1`
 
-## 8. Limits and notes
+`shoulder = −direction · amplitude · cos(2π · arm_phase)`
 
-- **Reachability.** `leg_ik` clamps the hip-to-ankle distance to `[|l1 − l2| + ε, l1 + l2 − ε]`, so an unreachable target never breaks the `acos` calls. The maximum is thigh + shin = 0.9 m. The largest distance on the default path is 0.814 m, so the knee stays slightly bent and the straight-leg singularity is avoided. The largest knee angle on the default path is 1.29 rad, inside the `[0, 2.0]` limit. Check both again if `step_length` or `hip_height` grow.
-- **Speed and direction** come from `step_length`, `period_s` and the sign of `direction`. Stance foot speed is `L / (duty_factor · period_s)`.
-- **Torso only.** Balance feedback covers torso pitch. There is no foot-placement feedback, so a large push can still topple the body.
-- **Feedback, not compensation.** The correction is a righting term. It does not make the foot target geometrically correct for a tilted torso, and `ankle_target` still receives `torso_pitch = 0`.
-- **Same correction on both legs.** The swing leg gets the term too, which slightly disturbs the swing arch when the lean is large.
-- **Ankle range.** The default gait needs −0.26 to −0.89 rad at the ankle, so the body config's dorsiflexion limit must allow at least 0.9 rad or the target clamps and the toes may drag in early swing. More knee flexion (a higher `step_height_m` or a lower `hip_height_m`) needs more dorsiflexion, so check this when those change.
+`arm.phase_offset` is the phase offset of the **opposite** leg (the left arm uses the right leg's offset, and vice versa). With a 0.5 leg offset, `cos(x + π) = −cos(x)`, so the arm mirrors the same-side leg's forward/back position.
+
+The leading minus is there because the shoulder follows the same convention as the hip: + is backward (clockwise), − is forward (counterclockwise).
+
+| Argument       | Unit     | Meaning                                      | YAML key              |
+| -------------- | -------- | -------------------------------------------- | --------------------- |
+| `amplitude`    | rad      | Peak shoulder angle                          | `arm.amplitude`       |
+| `enabled`      | 0 or 1   | 0 holds the arms at 0                        | `arm.enabled`         |
+| `phase_offset` | 0 to 1   | Opposite leg's offset                        | `legs.*.phase_offset` |
+| `direction`    | +1 or −1 | Same command as the legs. −1 flips the swing | command, not config   |
+
+### 8.2 Why a cosine
+
+The foot x goes from forward (phase 0) to back (phase `duty_factor`) and returns, so its shape is close to `cos(2π p)`. A continuous cosine matches this, has no jump at any phase, and keeps the shoulder PD target smooth. The arm does not use the stance/swing split.
+
+**Checks** (left arm, offset opposite to the left leg):
+
+| Left leg phase | Left leg foot | Left arm shoulder sign |
+| -------------- | ------------- | ---------------------- |
+| 0.0            | forward       | + (arm back)           |
+| 0.25           | mid stance    | 0                      |
+| 0.5            | back          | − (arm forward)        |
+
+### 8.3 Notes
+
+- **Disabled and stand only.** `arm.enabled = 0` or `stand_only` holds the arms at 0.
+- **Limits.** The target is clamped to the shoulder limits, so keep `amplitude` inside them.
+- **No balance term.** The arms do not react to torso pitch or COM, so they do not help recover from a push.
+
+## 9. Limits and notes
+
+- **Reachability.** `_leg_ik` clamps the hip-to-ankle distance to `[ε, 2l − ε]`, so an unreachable target never breaks the `acos` call. If the foot path gets close to full extension (`d` near `2l`), the knee approaches 0 and the leg nears the straight-leg singularity. Check this and the knee joint limit again if `step_length_m` or `hip_height_m` change.
+- **Speed and direction** come from `step_length_m`, `period_s`, `duty_factor` and the sign of `direction`. Stance foot speed is `L / (duty_factor · T)`.
+- **Balance is feedback only.** The hip term covers torso pitch and the ankle term covers COM position and velocity. There is no foot-placement feedback, so a large push can still topple the body.
+- **Not geometric compensation.** The corrections are righting terms. They do not make the foot target geometrically correct for a tilted torso.
+- **Stance only.** Both balance terms are applied only to the leg in stance, so they do not disturb the swing arch.
+- **Ankle range.** The body config's dorsiflexion limit must cover the knee flexion the gait needs, or the target clamps and the toes may drag in early swing.
+- **Config keys.** The code reads leg phase offsets from the gait config. Make sure the loader maps `legs.left/right.phase_offset` to the keys the controller expects.

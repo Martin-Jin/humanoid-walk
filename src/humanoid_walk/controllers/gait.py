@@ -40,8 +40,10 @@ class GaitController:
                 step_length_m=0.0,
                 step_height_m=0.0,
                 ankle=replace(self.gait.ankle, swing_angle=0.0),
-                arm=replace(self.gait.arm, amplitude=0.0),
             )
+        # For arm swing
+        self.arm_enabled = config.gait.arm["enabled"] > 0 and not self.stand_only
+        self.arm_amplitude = config.gait.arm["amplitude"]  # rad, peak shoulder angle
         self.direction = direction
         self.time_s = 0.0
         # For torso balance control, torso pitch and rate are used to adjust the hip target
@@ -188,11 +190,9 @@ class GaitController:
         return min(max(foot - hip - knee + balance, lo), hi)
 
     def _arm_target(self, arm: Arm) -> JointTargets:
-        """Shoulder target in rad. Swings continuously, opposite to the same-side leg."""
-        if self.gait.arm["enabled"] < 1.0:
+        """Shoulder target in rad. Swings opposite to the same-side leg. + = arm back."""
+        if not self.arm_enabled:
             return {arm.shoulder: 0.0}
-        a = self.gait.arm["amplitude"]
-        g = self.gait
-        phase = (self.time_s / g.period_s + arm.phase_offset) % 1.0
-        swing = self.direction * a * math.sin(2 * math.pi * phase)
+        phase = (self.time_s / self.gait.period_s + arm.phase_offset) % 1.0
+        swing = -self.direction * self.arm_amplitude * math.cos(2 * math.pi * phase)
         return {arm.shoulder: swing}
