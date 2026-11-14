@@ -139,6 +139,7 @@ class GaitConfig:
     ankle_balance: dict[str, float]
     hip_balance: dict[str, float]
     stand_only: bool
+    arm: dict[str, float]  # arm swing parameters
 
     def __post_init__(self):
         if self.period_s <= 0:

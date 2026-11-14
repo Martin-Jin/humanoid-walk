@@ -1,10 +1,20 @@
-"""Manual gait controller for humanoid walking."""
+"""Manual gait controller for humanoid walking. Produces joint targets for the
+legs based on a gait clock and torso state, which is passed to a body controller to
+produce the torques for each joint. The gait controller can be used as a policy in the viewer."""
 
 import math
 from dataclasses import dataclass, replace
 
 from humanoid_walk.controllers.joint_state import JointName, JointStates, JointTargets
 from humanoid_walk.config import Config
+
+
+@dataclass(frozen=True)
+class Arm:
+    """One shoulder joint and its phase offset (fraction of the cycle)."""
+
+    shoulder: JointName
+    phase_offset: float
 
 
 @dataclass(frozen=True)
@@ -30,6 +40,7 @@ class GaitController:
                 step_length_m=0.0,
                 step_height_m=0.0,
                 ankle=replace(self.gait.ankle, swing_angle=0.0),
+                arm=replace(self.gait.arm, amplitude=0.0),
             )
         self.direction = direction
         self.time_s = 0.0
@@ -76,16 +87,21 @@ class GaitController:
                 self.gait.phase_offsets["right"],
             ),
         ]
+        # Note arm should be opposite phase to the leg on the same side.
+        self.arms = [
+            Arm(JointName.SHOULDER_L, self.gait.phase_offsets["right"]),
+            Arm(JointName.SHOULDER_R, self.gait.phase_offsets["left"]),
+        ]
 
     def act(self, joint_states: JointStates) -> JointTargets:
-        """Joint targets for the current time."""
+        """Get Joint targets for the current time."""
         targets: JointTargets = {
             JointName.NECK: 0.0,
-            JointName.SHOULDER_L: 0.0,
-            JointName.SHOULDER_R: 0.0,
         }
         for leg in self.legs:
             targets.update(self._leg_targets(leg))
+        for arm in self.arms:
+            targets.update(self._arm_target(arm))
         return targets
 
     def reset(self) -> None:
@@ -170,3 +186,13 @@ class GaitController:
         foot = a.stance_angle if in_stance else a.swing_angle * math.sin(math.pi * s)
         lo, hi = self.ankle_limits
         return min(max(foot - hip - knee + balance, lo), hi)
+
+    def _arm_target(self, arm: Arm) -> JointTargets:
+        """Shoulder target in rad. Swings continuously, opposite to the same-side leg."""
+        if self.gait.arm["enabled"] < 1.0:
+            return {arm.shoulder: 0.0}
+        a = self.gait.arm["amplitude"]
+        g = self.gait
+        phase = (self.time_s / g.period_s + arm.phase_offset) % 1.0
+        swing = self.direction * a * math.sin(2 * math.pi * phase)
+        return {arm.shoulder: swing}

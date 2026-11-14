@@ -10,7 +10,7 @@ gait:
   touchdown_offset_m: 0.0 # m, shifts the whole foot path forward (+) / back (-) of the hip
   ankle: # foot angles relative to the ground, not joint angles
     stance_angle: 0.0 # rad, foot angle in stance (0 = flat)
-    swing_angle: -0.2 # rad, peak foot angle in swing (negative = toes up)
+    swing_angle: 0.0 # rad, peak foot angle in swing (negative = toes up)
   legs:
     left: { phase_offset: 0.0 } # dimensionless (0-1), fraction of the cycle
     right: { phase_offset: 0.5 } # dimensionless (0-1), half a cycle behind left
@@ -26,4 +26,6 @@ gait:
     kd: 0.6 # rad of ankle target per m/s of COM velocity
     enabled: 1.0 # 0 = off, 1 = on
   stand_only: False # If true, no walking gait is applied.
-
+  arm:
+    enabled: 1.0 # 0 = off, 1 = on
+    amplitude: 0.6 # rad, peak arm swing angle

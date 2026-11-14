@@ -1,5 +1,5 @@
-"""Defines the joint control logic for the humanoid robot,
-and provides a controller for the entire humanoid body."""
+"""Defines the joint control for the humanoid robot (does not produce commands).
+It also and provides a controller for the entire humanoid body."""
 
 from logging import config
 
