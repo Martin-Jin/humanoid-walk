@@ -451,4 +451,4 @@ The gait is sensitive to its settings: a poor combination falls within a few ste
 - **Test robustness, not one run.** Judge a setting by whether it still walks when every value is changed by a few percent. A tune that only works at exact values is not usable, because the simulation is chaotic.
 - **Start-up decides most outcomes.** A body that survives the first two steps keeps walking. Tune `start_phase` and `ramp_s` first.
 - **Damp the ankle.** The foot is light, so with `Kd` too small the ankle chatters between its torque limits. Raise `PD_ANKLE.Kd` as far as `Kd · dt / inertia < 2` allows.
-- **Retune after a body change.** The gains depend on the body mass, leg length and step size (see `AGENTS.md`).
+- **Retune after a body change.** The gains depend on the body mass, leg length and step size, so retune the gait and gains together whenever the body changes.

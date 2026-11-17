@@ -13,7 +13,9 @@ dist/
 build/
 TODO.md
 
-# Personal tooling. AGENTS.md and CLAUDE.md are tracked on purpose (shared agreement).
+# Personal AI tooling and working files, kept local only.
+AGENTS.md
+CLAUDE.md
 CLAUDE.local.md
 .claude/
 deleted/
