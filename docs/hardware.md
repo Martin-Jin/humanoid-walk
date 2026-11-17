@@ -13,6 +13,6 @@ TODO: fill in once the network and training loop exist.
 
 | Step                              | Device          | Why                                          |
 | --------------------------------- | --------------- | -------------------------------------------- |
-| Physics simulation, rewards       | CPU             | TODO. Must not depend on a GPU or on pygame. |
+| Physics simulation, rewards       | CPU             | `pymunk` only runs on the CPU. Must not depend on a GPU or on pygame. |
 | Action selection during rollouts  | TODO            | TODO                                         |
 | PPO update                        | Training device | TODO                                         |

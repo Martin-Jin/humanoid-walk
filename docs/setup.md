@@ -10,7 +10,7 @@
 
 From the repository root, choose one of the three options below. The project
 dependencies are declared in [`pyproject.toml`](../pyproject.toml). The project
-install provides NumPy, pygame-ce, and PyYAML.
+install provides Gymnasium, NumPy, pygame-ce, pymunk and PyYAML.
 
 The `--upgrade-deps` flag in the `venv` commands installs the latest pip into the
 new environment; remove it if you don't want that.
@@ -108,6 +108,20 @@ Run the compile check and the unit tests:
 py -m compileall src tests scripts
 py -m unittest discover -s tests
 ```
+
+Both should finish without errors (the tests print `OK`).
+
+## Run the viewer
+
+With the virtual environment active, from the repository root:
+
+```powershell
+py -m humanoid_walk.viewer.render.game
+```
+
+A pygame window opens with the humanoid. It stands, crouches and then starts walking. The terminal prints
+the gait and joint state every 20 frames. Use the **Reset** button to respawn it. See
+[gait.md](gait.md) for the printed fields.
 
 ## Deactivate and delete the environment
 

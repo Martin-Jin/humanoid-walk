@@ -12,3 +12,8 @@ __pycache__/
 dist/
 build/
 TODO.md
+
+# Personal tooling. AGENTS.md and CLAUDE.md are tracked on purpose (shared agreement).
+CLAUDE.local.md
+.claude/
+deleted/

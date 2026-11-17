@@ -5,32 +5,43 @@ reinforcement learning (PPO) with classical control (PID, inverted-pendulum
 methods, oscillator gaits) on one shared environment, and shows the result in a
 pygame viewer.
 
-The project is a skeleton. Nothing is implemented yet.
+**Status.** The physics simulation, the joint controllers, a hand-written gait
+controller and the pygame viewer exist. The gait does not yet walk reliably (the
+body falls after a few steps). The Gymnasium environment, rewards, PPO training
+and evaluation are not started.
 
-## Planned features
+## Features
 
-- 2D rigid-body humanoid simulated with `pymunk`, stepped at a fixed rate.
-- Gymnasium environment with a shaped walking reward.
-- Hand-written PPO training with checkpoints and resume.
+- 2D rigid-body humanoid simulated with `pymunk`, stepped at a fixed rate. *(done)*
+- PD and PID joint controllers, and a foot-trajectory gait controller with balance
+  feedback. *(done, being tuned)*
+- Pygame viewer with a manual joint panel, a reset button and mouse dragging. *(done)*
+- Gymnasium environment with a shaped walking reward. *(planned)*
+- Hand-written PPO training with checkpoints and resume. *(planned)*
 - Classical controllers behind the same interface as the learned policy, so
-  both are scored on identical metrics.
-- Pygame viewer to watch a controller or a trained policy walk.
+  both are scored on identical metrics. *(planned)*
 
-## Setup
+## Setup and run
 
 See the [setup guide](docs/setup.md). It covers the CPU and NVIDIA CUDA installs.
+
+Start the viewer from the repository root with the virtual environment active:
+
+```powershell
+py -m humanoid_walk.viewer.render.game
+```
 
 ## Layout
 
 | Folder                  | Holds                                                         |
 | ----------------------- | ------------------------------------------------------------- |
-| `src/humanoid_walk/sim` | Physics world, body, terrain, observation vector. No pygame.  |
-| `.../envs`              | Walking environment, rewards, vector env, Gymnasium adapter.  |
-| `.../controllers`       | Classical controllers (PID, LQR/ZMP, CPG) and their interface.|
-| `.../agents`            | Action codec, policy and actor-critic network.                |
-| `.../training`          | PPO, rollout buffer, rolling stats, checkpoints.              |
-| `.../evaluation`        | Gait metrics and the benchmark that compares controllers.     |
-| `.../viewer`            | Pygame only: app, scenes, rendering and widgets.              |
+| `src/humanoid_walk/sim` | Physics world, body, ground, observation vector. No pygame.   |
+| `.../envs`              | Walking environment, rewards, vector env, Gymnasium adapter. *(empty)* |
+| `.../controllers`       | Joint controllers, the gait controller and joint names.       |
+| `.../agents`            | Action codec, policy and actor-critic network. *(policy only)* |
+| `.../training`          | PPO, rollout buffer, rolling stats, checkpoints. *(empty)*    |
+| `.../evaluation`        | Gait metrics and the benchmark that compares controllers. *(empty)* |
+| `.../viewer`            | Pygame only: app, rendering and widgets.                      |
 | `.../utils`             | Seeding, device choice, logging and paths.                    |
 | `configs/`, `scripts/`  | YAML settings and entry-point scripts.                        |
 | `tests/`                | Unit tests, mirroring `src/`.                                 |
@@ -38,10 +49,11 @@ See the [setup guide](docs/setup.md). It covers the CPU and NVIDIA CUDA installs
 
 ## Documentation index
 
-- [docs/setup.md](docs/setup.md) — install, CUDA and verify the checkout.
-- [docs/hardware.md](docs/hardware.md) — what runs on the CPU and the GPU.
-- [docs/simulation-spec.md](docs/simulation-spec.md) — body, actions, observation, rewards, timing.
-- [docs/training-process.md](docs/training-process.md) — training loop and PPO.
-- [docs/controllers.md](docs/controllers.md) — classical control and the shared interface.
-- [docs/modules-reference.md](docs/modules-reference.md) — every module and folder.
-- [docs/resources.md](docs/resources.md) — papers, courses and docs for learning each part.
+- [docs/setup.md](docs/setup.md): open it to install the project, set up CUDA, run the viewer and check the checkout.
+- [docs/hardware.md](docs/hardware.md): open it to see what runs on the CPU and the GPU (mostly to be filled in once training exists).
+- [docs/simulation-spec.md](docs/simulation-spec.md): open it for the body, joints, timing, actions and observation layout.
+- [docs/training-process.md](docs/training-process.md): open it for the training loop and PPO (to be filled in once training exists).
+- [docs/controllers.md](docs/controllers.md): open it to see how targets become torques and which controllers exist.
+- [docs/gait.md](docs/gait.md): open it to understand or tune the gait controller (foot path, start-up, push-off, balance, arms).
+- [docs/modules-reference.md](docs/modules-reference.md): open it to find what each module and folder holds.
+- [docs/resources.md](docs/resources.md): open it for papers, courses and docs for learning each part.

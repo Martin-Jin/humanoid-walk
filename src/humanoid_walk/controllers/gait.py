@@ -291,7 +291,7 @@ class GaitController:
         return self.leg_length - self.crouch * (self.leg_length - g.hip_height_m)
 
     def _y_limit(self, hip_h: float) -> float:
-        """Longest commanded leg: 97% of full length, unless the nominal height is already above."""
+        """Longest commanded leg: max_leg_ratio of full length, unless hip_h is already above."""
         return max(self.max_leg_ratio * self.leg_length, hip_h)
 
     def _push_off(self, in_stance: bool, s: float) -> float:
