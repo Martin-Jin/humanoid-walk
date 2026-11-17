@@ -45,6 +45,8 @@ gait:
   start_up: # ramp up the gait from 0 to full over a few seconds
     stand_s: 1.0 # s, hold straight legs
     crouch_s: 1.0 # s, lower to hip_height_m
+    lean_s: 0.0 # s, after the crouch, move the pelvis forward over the planted feet. 0 = skip
+    lean_m: 0.0 # m, how far forward of the feet the pelvis ends up before the first step
     start_phase: 0.48 # 0-1, gait cycle phase the clock starts at (sets which leg steps first and when)
     ramp_s: 1.6 # s, ramp step length, height, swing angle and arm swing from 0 to full
   push_off:

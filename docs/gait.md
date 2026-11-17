@@ -88,7 +88,7 @@ Every setting in `gait.yaml`. Values live in the YAML only. Lengths are in m, ti
 | `stand_only`                      | bool   | If true, no walking gait is applied                                                 |
 | `arm.*`                           |        | `amplitude` (rad), `enabled` (section 8)                                            |
 | `balance_gate.*`                  |        | `enabled`, `stop_margin`, `resume_margin`, `blend_s` (section 3.4)                  |
-| `start_up.*`                      |        | `stand_s`, `crouch_s`, `ramp_s` (s), `start_phase` (0 to 1) (section 3.1)           |
+| `start_up.*`                      |        | `stand_s`, `crouch_s`, `lean_s`, `ramp_s` (s), `lean_m` (m), `start_phase` (0 to 1) (3.1) |
 | `push_off.*`                      |        | `start`, `extend_m`, `back_m`, `ankle_angle`, `unwind` (section 4.3)                |
 | `touchdown.*`                     |        | `landing_start`, `reach_*`, `hold_*` (sections 3.3 and 4.4)                         |
 | `foot_placement.*`                |        | `gain`, `max_m`, `deadband_mps` (section 4.5)                                       |
@@ -111,11 +111,14 @@ Derived inside the functions: `half = L · walk / 2` (m), and `s` (0 to 1), the 
 | ------- | --------------------------------------- | ------------------------------------------------------------------------------- |
 | Stand   | `0` to `stand_s`                        | Legs straight (`y = leg_length_m`)                                              |
 | Crouch  | `stand_s` to `stand_s + crouch_s`       | `crouch` eases 0 to 1, so the hip lowers to `hip_height_m`                      |
-| Ramp    | after the crouch, for `ramp_s`          | `walk` eases 0 to 1. It scales step length, step height, swing angle, arm swing, push-off and the ankle reference speed |
+| Lean    | after the crouch, for `lean_s`          | Both feet stay planted and move back by `lean_m` relative to the hips, so the pelvis ends up ahead of them. Skipped when `lean_s` is 0 |
+| Ramp    | after the lean, for `ramp_s`            | `walk` eases 0 to 1. It scales step length, step height, swing angle, arm swing, push-off and the ankle reference speed |
 
 Both ramps are a smoothstep, `x²(3 − 2x)`, which has zero slope at both ends.
 
-**Start phase.** The gait clock starts at `start_up.start_phase · period_s` when the crouch ends, so `start_phase` chooses which leg steps first and how soon. At 0 the left leg starts at touchdown and the right leg is already late in stance (83% through with the old `duty_factor` of 0.6, 71% with 0.7), so the right foot lifts after about `0.1 · period_s`, while the body is still at rest and the step length is still near 0. The falls observed with that start were backward: the swing foot landed ahead of a COM that had not yet picked up speed, and the body tipped over it. The configured value (0.48) starts the right leg at the end of its swing, so it lands almost at once and carries weight through a double-support period (about `0.2 · period_s`) before the left foot lifts. This was found by search, not derived: the falls clustered in the first steps, and this start survived. It has not been compared against changing only the start phase.
+**Lean.** Starting a stride from rest needs the pelvis to be moving forward. The lean stage moves it forward over the planted feet first: both foot targets slide back by `lean_m`, and the ankle balance expects the matching COM speed. The first stance of each leg then starts from that offset and the first swing lifts from it, so no target jumps when the clock starts. It is off by default (`lean_s = 0`): it is available, but the tuned gait does not use it.
+
+**Start phase.** The gait clock starts at `start_up.start_phase · period_s` when the crouch ends, so `start_phase` chooses which leg steps first and how soon. The configured value (0.48) starts the right leg at the end of its swing, so it lands almost at once and carries weight through a double-support period (about `0.2 · period_s`) before the left foot lifts. Starting at 0 would lift the right foot after about `0.1 · period_s`, while the body is still at rest.
 
 ### 3.2 The clock
 
@@ -148,7 +151,7 @@ Without `set_contacts` (`contacts is None`) nothing waits and the reach (section
 
 `Simulation.feet_on_ground` reports whether the foot has a pymunk contact (a collision record) with the ground. A foot counts as down for `world.contact_hold_s` (0.03 s) after its last contact, which bridges a single physics step where a resting contact drops out.
 
-**Limitation: the stance foot really does lose the ground.** In the configured gait the foot is within 0.5 mm of the ground (and flagged as touching) in only about 60% of mid-stance frames. For the rest it hovers 0.5 to 20 mm above it. The flag follows this accurately, so the touchdown hold (section 3.3) is often waiting for a foot that is genuinely in the air. The cause is the legs: they are position controlled with no give, so the body bobs and the planted foot lifts. Lengthening the stance leg while its foot has no contact (the reach in section 4.4 only works in late swing) would be the way to fix it.
+**Limitation: the stance foot can lose the ground.** The legs are position controlled with no give, so the body bobs and a planted foot can hover a few millimetres above the floor for part of stance. The contact flag follows this, so the touchdown hold may wait for a foot that is genuinely in the air. A reach that lengthens the stance leg while its foot has no contact (section 4.4 only works in late swing) would address it.
 
 ### 3.4 Balance gate
 
@@ -271,7 +274,7 @@ The shift at the end of the swing is latched when the foot lands. The stance the
 
 **Limitations.**
 - The COM speed is read once per frame with no filtering, so it includes the normal speed ripple within a stride. The deadband hides that ripple.
-- In simulation it improved recovery from forward pushes (18 of 30 whole-body pushes survived against 13 without it), with little change for backward pushes (15 against 14).
+- It helps most against forward pushes. A backward push needs the foot to land nearer, which the cap and the leg reach limit.
 - The shift is capped by `max_m` and by the leg reach (`validate_gait` includes it).
 
 ## 5. Inverse kinematics
@@ -338,9 +341,7 @@ The code drops `torso_pitch` and uses the nominal `hip0` (before the hip balance
 - **Planned** (`measured_ref = 0`): the planned `hip0` and knee, plus `pitch_ref` of the torso pitch. This trusts the leg to follow its targets.
 - **Measured** (`measured_ref = 1`): the joint angles as they really are, plus the full torso pitch. The ankle then holds the foot flat whatever the other joints do. `measured_ref` blends between the two.
 
-**Limitation: the stance foot is not flat, and flattening it costs robustness.** In the configured gait the stance foot sits about 0.13 rad toes-down for the whole stance, even right after touchdown. The cause is steady tracking error under load, not the hip balance shift: in mid-stance the hip sits about 0.09 rad behind its target and the knee about 0.07 rad past its, because the PD gains are finite and the body weighs on them. Subtracting the hip balance shift made things worse, because with the foot planted the ankle then pushes against the hip balance.
-
-With the measured reference the gait falls within a few seconds unless every gain is retuned. A search that required the stance foot to stay within 0.06 rad of flat did find gaits that walk, but they survived none of the backward pushes and fewer forward ones than the configured gait. So `measured_ref` is 0. The tilted foot is part of what makes the tuned gait robust: it acts as a second balance strategy, and the toe-down ankle torque pushes the body back.
+**Limitation: the stance foot is not exactly flat under load.** The joints do not reach their targets exactly (the PD gains are finite and the body weighs on them), so the planned chain overstates how the leg really sits and the foot rests slightly toes-down. `measured_ref` removes this by following the real joints, but the balance terms and gains are tuned for the planned reference, so any value above 0 needs a retune. It defaults to 0.
 
 The body config's dorsiflexion limit must be wide enough for the knee flexion the gait needs. More knee flexion (a higher `step_height_m` or a lower `hip_height_m`) needs more dorsiflexion, otherwise the target clamps and the toes may drag in early swing.
 
@@ -381,7 +382,7 @@ After `_leg_ik`, each leg gets:
 ![Measured lean and the torque pair that corrects it](resources/balance_geometry.svg)
 ![Hip target correction versus torso pitch and rate](resources/balance_correction.svg)
 
-**Limitations.** The gains are large (`kp` is in rad of hip per rad of lean, well above 1), so a lean of about 0.09 rad already saturates the 300 N·m hip torque limit. With `kd = 0.6` the simulated body fell within a fraction of a second of the walk starting. The targets are held for a whole frame, so the loop has a one-frame delay, which limits how much derivative gain it tolerates.
+**Limitations.** The gains are large (`kp` is in rad of hip per rad of lean, well above 1), so a lean of about 0.09 rad already saturates the 300 N·m hip torque limit. The targets are held for a whole frame, so the loop has a one-frame delay, which limits how much derivative gain it tolerates.
 
 ### 7.3 Ankle balance (COM position and velocity)
 
@@ -405,9 +406,7 @@ The ankle adds a second correction that acts on the whole body, using the COM po
 
 **Planned COM.** The whole-body COM is not over the hip: with the knees flexed the thighs and shins lie forward of the hip-ankle line. With `planned_com = 1`, `_planned_com_x` computes the COM relative to the hip each frame from the planned pose. The torso and head stand upright over the hip. The arms and each leg link are placed by forward kinematics (positions from joint angles) from the planned angles, with each link's mass at the middle of its length. So `dx_ref` follows the pose through the stride (which leg is forward, how far the knees bend, where the arms are). With `planned_com = 0` it falls back to a constant, `−x + com_offset_m`.
 
-**Limitation: the plan misses the real pose by about 0.1 m.** The joints do not reach their targets under load (section 6), so the real COM sits further ahead than the planned one. In the standing pose the plan predicted 0.026 m ahead of the ankle and 0.13 m was measured. `com_offset_m` (0.054) is a trim that absorbs this, and it is a constant, so it is only exact for the configured pose.
-
-**What it changes in practice.** Very little. The position gain `ankle_balance.kp` is small (0.2 rad/m), so a 0.05 m error in the reference moves the ankle target by about 0.01 rad. In simulation the planned COM gave the same results as the constant offset, including when `hip_height_m` was changed from 0.80 to 0.88. It matters more if `kp` is raised.
+**Limitation: the plan is not the real pose.** The joints sag under load (section 6), so the real COM sits further ahead than the planned one. `com_offset_m` is a constant trim for the difference, so it is only exact for the configured pose. The position gain `ankle_balance.kp` is small (0.2 rad/m), so a 0.05 m error in the reference moves the ankle target by about 0.01 rad.
 
 **Other limits.**
 
@@ -453,14 +452,14 @@ The leading minus is there because the shoulder follows the same convention as t
 - **Not geometric compensation.** The corrections are righting terms. They do not make the foot target geometrically correct for a tilted torso (see the limitation in section 6).
 - **Balance runs in stance only,** faded in and out by section 7.1, so it does not disturb the swing arch.
 - **One clock for both legs.** The touchdown hold and the gate freeze both legs together, including a leg in late stance.
-- **Weight shift is implicit.** There is no explicit weight-shift state. The clock simply starts at `start_phase` (section 3.1), and the balance terms do the rest.
+- **The start is open loop.** Start-up runs on timers (section 3.1). It does not wait for the body to be steady before the first step.
 - **Foot placement only reacts to COM speed.** It does not look at the COM position, and it does not help much against a backward push (section 4.5).
 
 ## 11. Tuning
 
-The gait is sensitive to its settings: a poor combination falls within a few steps. These rules came out of a search over the settings in a headless simulation (`tests/test_walk.py` runs the same loop).
+The gait is sensitive to its settings, and `tests/test_walk.py` runs the headless loop used to check them.
 
-- **Test robustness, not one run.** Judge a setting by whether it still walks when every value is changed by a few percent. A tune that only works at exact values is not usable, because the simulation is chaotic.
-- **Start-up decides most outcomes.** A body that survives the first two steps keeps walking. Tune `start_phase` and `ramp_s` first.
-- **Damp the ankle.** The foot is light, so with `Kd` too small the ankle chatters between its torque limits. Raise `PD_ANKLE.Kd` as far as `Kd · dt / inertia < 2` allows.
+- **Test robustness, not one run.** A setting is only usable if the gait still walks when every value is changed by a few percent and when the body is pushed. The simulation is chaotic, so a tune that only works at exact values is not usable.
+- **The first steps matter most.** A body that survives the first two steps keeps walking. Tune `start_phase`, `ramp_s` and the lean (section 3.1) first.
+- **Damp the ankle.** The foot is light, so with `Kd` too small the ankle flips between its torque limits. Raise `PD_ANKLE.Kd` as far as `Kd · dt / inertia < 2` allows.
 - **Retune after a body change.** The gains depend on the body mass, leg length and step size, so retune the gait and gains together whenever the body changes.

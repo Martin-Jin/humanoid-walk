@@ -75,6 +75,8 @@ class GaitController:
         self.stand_s = g.start_up["stand_s"]
         self.crouch_s = g.start_up["crouch_s"]
         self.ramp_s = g.start_up["ramp_s"]
+        self.lean_s = g.start_up["lean_s"]  # pelvis moves forward over the planted feet
+        self.lean_m = g.start_up["lean_m"]
 
         # Leg geometry (the sim builds equal thigh and shin lengths)
         self.leg_length = h.leg_length_m
@@ -176,6 +178,7 @@ class GaitController:
         self.contacts: dict[JointName, bool] | None = None  # None = open loop
         self.reach = {leg.ankle: 0.0 for leg in self.legs}
         self.wait_s = 0.0
+        self.lean_done = False
         self.joint_states: JointStates = {}  # measured joints from the latest act()
         # Foot placement: landing shift (m, in the gait frame) of the swing in progress, and the
         # one the current stance started with (so the stance and the next lift-off stay continuous)
@@ -206,8 +209,30 @@ class GaitController:
 
     # ----------------------------------------------------------------- clock
 
+    def _startup_end_s(self) -> float:
+        return self.stand_s + self.crouch_s + self.lean_s
+
     def _in_startup(self) -> bool:
-        return self.elapsed_s <= self.stand_s + self.crouch_s
+        return self.elapsed_s <= self._startup_end_s()
+
+    def _apply_lean(self) -> None:
+        """During the lean stage move both planted feet back under the hips' progress, so the
+        pelvis ends up lean_m ahead of them. The first stance of each leg starts from there."""
+        if self.lean_done or self.stand_only:
+            return
+        u = _ramp(self.elapsed_s, self.stand_s + self.crouch_s, self.lean_s) if self.lean_s else 1.0
+        for leg in self.legs:
+            self.swing_shift[leg.ankle] = -self.lean_m * u
+        self.lean_done = self.elapsed_s > self._startup_end_s()
+
+    def _lean_speed(self) -> float:
+        """How fast (m/s) the pelvis is being moved forward over the feet by the lean stage."""
+        if self.lean_s <= 0 or self.stand_only:
+            return 0.0
+        u = (self.elapsed_s - self.stand_s - self.crouch_s) / self.lean_s
+        if not 0.0 < u < 1.0:
+            return 0.0
+        return self.lean_m * 6.0 * u * (1.0 - u) / self.lean_s  # derivative of the smoothstep
 
     def _standing(self) -> bool:
         return self.stand_only or self._in_startup()
@@ -218,7 +243,7 @@ class GaitController:
         crouch = _ramp(t, self.stand_s, self.crouch_s)
         if self.stand_only:
             return crouch, 0.0
-        walk = _ramp(t, self.stand_s + self.crouch_s, self.ramp_s) * self.gate_scale
+        walk = _ramp(t, self._startup_end_s(), self.ramp_s) * self.gate_scale
         return crouch, walk
 
     def step_clock(self, dt: float) -> None:
@@ -312,6 +337,7 @@ class GaitController:
         controller works from the clock and the set_* inputs.)"""
         self.joint_states = joint_states
         self.crouch, self.walk = self._startup()
+        self._apply_lean()
         targets: JointTargets = {JointName.NECK: 0.0}
         for arm in self.arms:
             targets.update(self._arm_target(arm))
@@ -415,6 +441,7 @@ class GaitController:
             com_x = 0.0 if planned_com_x is None else planned_com_x
             dx_ref = com_x - x + self.com_offset
             vx_ref = self.direction * g.step_length_m * self.walk / (g.duty_factor * g.period_s)
+            vx_ref += self._lean_speed()
             balance = w * (
                 self.ankle_balance_kp * (self.com_dx[leg.ankle] - dx_ref)
                 + self.ankle_balance_kd * (self.com_vx - vx_ref)

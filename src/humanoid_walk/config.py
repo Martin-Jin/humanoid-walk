@@ -226,7 +226,13 @@ def validate_gait(gait: GaitConfig, humanoid: HumanoidConfig) -> None:
     # Reach: worst-case foot position relative to the hip
     max_offset = max(abs(gait.touchdown_offset_m), abs(gait.backward.touchdown_offset_m))
     drop = gait.hip_height_m + push["extend_m"] + td["reach_max_m"]
-    reach_x = gait.step_length_m / 2 + max_offset + push["back_m"] + gait.foot_placement["max_m"]
+    reach_x = (
+        gait.step_length_m / 2
+        + max_offset
+        + push["back_m"]
+        + gait.foot_placement["max_m"]
+        + gait.start_up["lean_m"]
+    )
     reach = math.hypot(reach_x, drop)
 
     if drop > limit:
@@ -251,6 +257,8 @@ def validate_gait(gait: GaitConfig, humanoid: HumanoidConfig) -> None:
         raise ValueError("foot_placement gain, max_m and deadband_mps must be >= 0.")
     if not 0.0 <= push["start"] < 1.0:
         raise ValueError("push_off.start must be in [0, 1).")
+    if gait.start_up["lean_s"] < 0 or gait.start_up["lean_m"] < 0:
+        raise ValueError("start_up.lean_s and lean_m must be >= 0.")
     if not 0.0 <= gait.start_up["start_phase"] < 1.0:
         raise ValueError("start_up.start_phase must be in [0, 1).")
     if not 0.0 < push["unwind"] <= 1.0:

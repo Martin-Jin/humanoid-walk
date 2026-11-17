@@ -114,6 +114,19 @@ class GaitTests(unittest.TestCase):
         arms_back = {arm.shoulder: 1.0 for arm in gait.arms}
         self.assertLess(gait._planned_com_x(plans, arms_back), crouched)
 
+    def test_lean_stage_moves_the_planted_feet_back_under_the_pelvis(self):
+        config = load_config()
+        start_up = {**config.gait.start_up, "lean_s": 0.5, "lean_m": 0.05}
+        gait = GaitController(replace(config, gait=replace(config.gait, start_up=start_up)))
+        gait.elapsed_s = gait.stand_s + gait.crouch_s + gait.lean_s  # lean complete
+        gait.act({})
+        for leg in gait.legs:
+            self.assertAlmostEqual(gait._leg_plan(leg).x, -0.05, places=6)
+        gait.elapsed_s = gait.stand_s + gait.crouch_s + gait.lean_s / 2
+        gait.act({})
+        halfway = gait._leg_plan(gait.legs[0]).x
+        self.assertTrue(-0.05 < halfway < 0.0)
+
     def test_reset_restarts_clock_and_startup(self):
         gait = walking_gait()
         start = GaitController(load_config()).time_s
