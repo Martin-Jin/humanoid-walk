@@ -283,7 +283,7 @@ def load_config() -> Config:
         k: ControllerConfig.from_dict(v)
         for k, v in load_yaml("controller.yaml")["Controller"].items()
     }
-    gait = GaitConfig.from_dict(load_yaml("gait.yaml")["gait"])
+    gait = GaitConfig.from_dict(load_yaml("gait.yaml"))
     validate_gait(gait, humanoid)
 
     return Config(
