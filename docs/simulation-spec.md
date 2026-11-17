@@ -37,7 +37,7 @@ N·m are scaled by `ppm²` when applied, so all config values are in SI units.
 | Shin (×2)   | vertical segment                       | 3.45      | `leg_length_m / 2` long, `leg_width_m` wide |
 | Foot (×2)   | horizontal segment                     | 1.05      | `foot_length_m` long, `foot_width_m` wide  |
 
-The masses must sum to `mass_kg` or loading the config fails. The ankle pivot sits 0.03 m behind the
+The masses must sum to `mass_kg` or loading the config fails. The ankle pivot sits `ankle_offset_m` behind the
 foot centre. Bodies share a collision group, so the body parts do not collide with each other, only with
 the ground.
 
@@ -55,11 +55,9 @@ parent angle, and positive turns the child clockwise on screen (0 is the standin
 Setting `pin_torso: true` holds the torso upright with a gear joint. It is a debug option to test
 propulsion without balance.
 
-**Ground.** One static segment across the screen width with `world.floor_friction`. The segment is
-drawn with a 10 px radius, so its top surface is 10 px (0.1 m) above `floor_y_px`.
+**Ground.** One static segment across the screen width with `world.floor_friction` and `world.ground_thickness_m`. Its top surface is half the thickness above `floor_y_px`. The humanoid spawns just above it, at `world.spawn_x_frac` of the screen width.
 
-**Note:** a comment in `Simulation.setup` says the ground is 0.05 m thick, but the code makes it 0.2 m
-thick, so the humanoid spawns about 7.5 px inside the ground and is pushed out in the first frames.
+**Speed cap.** `world.max_body_speed_mps` limits the speed of every body, which keeps the solver stable if something goes wrong.
 
 ## Actions
 

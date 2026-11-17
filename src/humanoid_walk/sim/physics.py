@@ -13,14 +13,16 @@ from humanoid_walk.controllers.joint_state import (
 )
 
 
-def limit_velocity(body, gravity, damping, dt):
-    """Limit the velocity of a body to prevent it from going too fast."""
-    max_velocity = 1000
-    pymunk.Body.update_velocity(body, gravity, damping, dt)
-    l = body.velocity.length
-    if l > max_velocity:
-        scale = max_velocity / l
-        body.velocity = body.velocity * scale
+def make_velocity_limiter(max_velocity: float):
+    """Return a pymunk velocity function that caps a body's speed (pixels/s)."""
+
+    def limit_velocity(body, gravity, damping, dt):
+        pymunk.Body.update_velocity(body, gravity, damping, dt)
+        speed = body.velocity.length
+        if speed > max_velocity:
+            body.velocity = body.velocity * (max_velocity / speed)
+
+    return limit_velocity
 
 
 class Simulation:
@@ -34,7 +36,8 @@ class Simulation:
         self.substeps = (
             config.world.physics_substeps
         )  # physics steps per frame; torques are recomputed each one
-        self.spawn_x_frac = 0.2  # humanoid spawns at 20% of screen width
+        self.spawn_x_frac = config.world.spawn_x_frac  # fraction of the screen width
+        self.limit_velocity = make_velocity_limiter(self.px(config.world.max_body_speed_mps))
 
     def _new_space(self):
         """Create an empty pymunk space with gravity set."""
@@ -105,7 +108,7 @@ class Simulation:
         self.add_segment(
             (r.screen_width / 2, r.floor_y_px),
             length_m=r.screen_width / self.ppm,
-            width_m=20 / self.ppm,
+            width_m=self.config.world.ground_thickness_m,
             friction=self.config.world.floor_friction,
             vertical=False,
             static=True,
@@ -118,11 +121,11 @@ class Simulation:
         thigh_len = shin_len = h.leg_length_m / 2
         thigh_half = self.px(thigh_len) / 2
         shin_half = self.px(shin_len) / 2
-        ankle_off = self.px(0.03)  # ankle sits 0.03 m behind the foot's centre (0.095 m from heel)
+        ankle_off = self.px(h.ankle_offset_m)  # the ankle sits this far behind the foot's centre
 
         # Spawn position: upright, feet resting on the ground surface
         tx = r.screen_width * self.spawn_x_frac
-        ground_top = r.floor_y_px - self.px(0.025)  # ground segment is 0.05 m thick
+        ground_top = r.floor_y_px - self.px(self.config.world.ground_thickness_m) / 2
         below_torso_centre = torso_half + self.px(h.leg_length_m) + self.px(h.foot_width_m) / 2
         ty = ground_top - below_torso_centre - 1  # 1 px gap, so it settles without dropping
 
@@ -134,7 +137,7 @@ class Simulation:
             (tx, top_y - head_r),
             h.head_radius_m,
             mass=m["head"],
-            velocity_func=limit_velocity,
+            velocity_func=self.limit_velocity,
             friction=fric,
         )
 
@@ -144,7 +147,7 @@ class Simulation:
             length_m=h.torso_length_m,
             width_m=h.torso_width_m,
             mass=m["torso"],
-            velocity_func=limit_velocity,
+            velocity_func=self.limit_velocity,
             friction=fric,
         )
 
@@ -155,7 +158,7 @@ class Simulation:
                 length_m=h.arm_length_m,
                 width_m=h.arm_width_m,
                 mass=m["arm"],
-                velocity_func=limit_velocity,
+                velocity_func=self.limit_velocity,
                 friction=fric,
             )
             shoulder = pymunk.PivotJoint(arm, self.torso, (0, -arm_half), (0, -torso_half))
@@ -174,7 +177,7 @@ class Simulation:
                 length_m=thigh_len,
                 width_m=h.leg_width_m,
                 mass=m["thigh"],
-                velocity_func=limit_velocity,
+                velocity_func=self.limit_velocity,
                 friction=fric,
             )
             shin = self.add_segment(
@@ -182,7 +185,7 @@ class Simulation:
                 length_m=shin_len,
                 width_m=h.leg_width_m,
                 mass=m["shin"],
-                velocity_func=limit_velocity,
+                velocity_func=self.limit_velocity,
                 friction=fric,
             )
             foot = self.add_segment(
@@ -190,7 +193,7 @@ class Simulation:
                 length_m=h.foot_length_m,
                 width_m=h.foot_width_m,
                 mass=m["foot"],
-                velocity_func=limit_velocity,
+                velocity_func=self.limit_velocity,
                 friction=fric,
                 vertical=False,
             )

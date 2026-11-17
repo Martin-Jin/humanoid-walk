@@ -7,4 +7,7 @@ world:
   floor_y_m: 0.0
   floor_friction: 100 # pymunk shape friction, dimensionless
   physics_substeps: 8 # physics steps per frame; torques are recomputed each one
+  ground_thickness_m: 0.2 # m, thickness of the static ground segment
+  spawn_x_frac: 0.2 # humanoid spawns at this fraction of the screen width
+  max_body_speed_mps: 10.0 # m/s, cap on the speed of any body (keeps the solver stable)
 

@@ -11,9 +11,6 @@ from dataclasses import dataclass, replace
 from humanoid_walk.controllers.joint_state import JointName, JointStates, JointTargets
 from humanoid_walk.config import Config
 
-GRAVITY = 9.81
-ANKLE_BEHIND_FOOT_CENTRE_M = 0.03  # the ankle sits this far behind the foot centre
-
 
 @dataclass(frozen=True)
 class Arm:
@@ -82,14 +79,16 @@ class GaitController:
         self.gate_stop = g.balance_gate["stop_margin"]
         self.gate_resume = g.balance_gate["resume_margin"]
         # Foot extent either side of the ankle
-        self.heel = h.foot_length_m / 2 - ANKLE_BEHIND_FOOT_CENTRE_M
-        self.toe = h.foot_length_m / 2 + ANKLE_BEHIND_FOOT_CENTRE_M
+        self.heel = h.foot_length_m / 2 - h.ankle_offset_m
+        self.toe = h.foot_length_m / 2 + h.ankle_offset_m
+        self.gravity = config.world.gravity_mps2
 
         # Push-off: late stance, the leg lengthens and the ankle plantarflexes
         self.push_start = g.push_off["start"]
         self.push_extend = g.push_off["extend_m"]
         self.push_ankle = g.push_off["ankle_angle"]
         self.push_back = g.push_off["back_m"]
+        self.push_unwind = g.push_off["unwind"]  # fraction of swing over which push-off unwinds
 
         # Balance gains
         self.balance_kp = g.hip_balance["kp"]  # rad of hip target per rad of torso lean
@@ -98,10 +97,12 @@ class GaitController:
         self.ankle_balance_kp = g.ankle_balance["kp"]  # rad of ankle target per m of COM offset
         self.ankle_balance_kd = g.ankle_balance["kd"]  # rad of ankle target per m/s of COM speed
         self.ankle_balance = g.ankle_balance["enabled"] > 0
+        # Static shift of the planned COM from over the hip, m (+ = ahead of the hip)
+        self.com_offset = g.ankle_balance["com_offset_m"]
         self.balance_blend = g.balance_blend
 
-        self.max_hip_balance = 0.5  # rad, cap on the hip balance correction
-        self.max_ankle_balance = 0.07  # rad, cap on the ankle balance correction
+        self.max_hip_balance = g.hip_balance["max_correction"]  # rad, cap on the correction
+        self.max_ankle_balance = g.ankle_balance["max_correction"]  # rad, cap on the correction
 
         # Touchdown tuning
         td = g.touchdown
@@ -133,7 +134,7 @@ class GaitController:
     def _reset_state(self) -> None:
         """All runtime state, shared by __init__ and reset()."""
         self.elapsed_s = 0.0  # time since start, always runs (the gait clock starts later)
-        self.time_s = 0.0  # gait clock
+        self.time_s = self.gait.start_up["start_phase"] * self.gait.period_s  # gait clock
         self.crouch = 0.0  # 0 = straight legs, 1 = walking hip height
         self.walk = 0.0  # 0 = no stepping, 1 = full gait
         # Torso and COM state for balance control
@@ -264,7 +265,7 @@ class GaitController:
         stance = self._stance_legs()
         if not stance:
             return
-        omega = math.sqrt(GRAVITY / max(self.com_height, 0.1))
+        omega = math.sqrt(self.gravity / max(self.com_height, 0.1))
         cp = self.com_vx / omega  # capture point relative to the COM (m)
         ankles = [-self.com_dx[leg.ankle] for leg in stance]  # stance ankle x relative to COM
         rear = min(ankles) - self.heel
@@ -298,7 +299,7 @@ class GaitController:
         """0 to 1 push-off blend: ramps up over late stance, unwinds over early swing."""
         if in_stance:
             return _ramp(s, self.push_start, 1.0 - self.push_start) * self.walk
-        return (1.0 - _ramp(s, 0.0, 0.2)) * self.walk
+        return (1.0 - _ramp(s, 0.0, self.push_unwind)) * self.walk
 
     def _extension(self, in_stance: bool, s: float, hip_h: float) -> float:
         """How far (m) a leg in this state is commanded longer than nominal."""
@@ -355,7 +356,7 @@ class GaitController:
         balance = 0.0
         if self.ankle_balance:
             # Planned COM is over the hip, so relative to this ankle it should sit at -x.
-            dx_ref = -x
+            dx_ref = -x + self.com_offset
             vx_ref = self.direction * g.step_length_m * self.walk / (g.duty_factor * g.period_s)
             balance = w * (
                 self.ankle_balance_kp * (self.com_dx[leg.ankle] - dx_ref)
@@ -405,6 +406,7 @@ class GaitController:
         foot = a.stance_angle if in_stance else a.swing_angle * self.walk * math.sin(math.pi * s)
         foot += self.push_ankle * self._push_off(in_stance, s)
         lo, hi = self.ankle_limits
+        foot -= a.pitch_ref * self.torso_pitch  # the chain below the torso rotates with it
         return _clamp(foot - hip - knee + balance, lo, hi)
 
     def _arm_target(self, arm: Arm) -> JointTargets:

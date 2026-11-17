@@ -50,14 +50,16 @@ class GaitTests(unittest.TestCase):
 
     def test_clock_waits_for_the_startup_sequence(self):
         gait = GaitController(load_config())
+        start = gait.time_s  # start_up.start_phase of the cycle
         gait.step_clock(gait.stand_s + gait.crouch_s - 0.1)
-        self.assertEqual(gait.time_s, 0.0)
+        self.assertEqual(gait.time_s, start)
         gait.step_clock(0.5)
         gait.step_clock(0.5)
-        self.assertGreater(gait.time_s, 0.0)
+        self.assertGreater(gait.time_s, start)
 
     def test_right_leg_is_half_a_cycle_behind(self):
         gait = walking_gait()
+        gait.time_s = 0.0
         left = gait.act({})[JointName.HIP_L]
         gait.time_s = gait.gait.period_s / 2
         right_later = gait.act({})[JointName.HIP_R]
@@ -65,9 +67,10 @@ class GaitTests(unittest.TestCase):
 
     def test_reset_restarts_clock_and_startup(self):
         gait = walking_gait()
+        start = GaitController(load_config()).time_s
         gait.step_clock(0.7)
         gait.reset()
-        self.assertEqual(gait.time_s, 0.0)
+        self.assertEqual(gait.time_s, start)
         self.assertEqual(gait.elapsed_s, 0.0)
 
     def test_clock_holds_for_contact_then_carries_on(self):

@@ -11,6 +11,7 @@ torso_length_m: 0.7 # m
 torso_width_m: 0.3 # m
 foot_length_m: 0.25 # m
 foot_width_m: 0.08 # m
+ankle_offset_m: 0.03 # m, the ankle pivot sits this far behind the foot centre
 pin_torso: false # If true, torso is pinned upright and cannot rotate. Useful for testing propulsion without balance.
 
 # Mass of each part in kg. Left and right share the same value.

@@ -2,17 +2,18 @@
 # Foot position is the ankle target measured from the hip.
 # x: + forward, y: + down (so hip_height_m is a positive y).
 gait:
-  period_s: 1.25 # s, time for one full gait cycle
-  duty_factor: 0.6 # dimensionless (0-1), fraction of the cycle in stance
-  step_length_m: 0.25 # m, total foot travel per step (stance sweep)
-  step_height_m: 0.03 # m, peak foot lift during swing
-  hip_height_m: 0.88 # m, hip-to-ankle distance in stance; must stay below max_leg_ratio * leg_length_m
+  period_s: 1.32 # s, time for one full gait cycle
+  duty_factor: 0.7 # dimensionless (0-1), fraction of the cycle in stance
+  step_length_m: 0.27 # m, total foot travel per step (stance sweep)
+  step_height_m: 0.072 # m, peak foot lift during swing
+  hip_height_m: 0.843 # m, hip-to-ankle distance in stance; must stay below max_leg_ratio * leg_length_m
   touchdown_offset_m: 0.0 # m, shifts the whole foot path forward (+) / back (-) of the hip
   max_leg_ratio: 0.99 # commanded leg never longer than this x leg_length_m
-  balance_blend: 0.15 # fraction of stance over which balance terms fade in/out
+  balance_blend: 0.12 # fraction of stance over which balance terms fade in/out
   ankle: # foot angles relative to the ground, not joint angles
     stance_angle: 0.0 # rad, foot angle in stance (0 = flat)
     swing_angle: -0.01 # rad, peak foot angle in swing (negative = toes up)
+    pitch_ref: 0.17 # 0-1, share of the torso pitch subtracted from the ankle target (1 = foot angle follows the ground)
   legs:
     left: { phase_offset: 0.0 } # dimensionless (0-1), fraction of the cycle
     right: { phase_offset: 0.5 } # dimensionless (0-1), half a cycle behind left
@@ -20,12 +21,15 @@ gait:
     step_height_m: 0.10 # m
     touchdown_offset_m: -0.03 # m
   hip_balance: # torso pitch and rate are used to adjust the hip target
-    kp: 5.75 # rad of hip target per rad of torso lean
-    kd: 0.3 # rad of hip target per rad/s of torso rotation
+    kp: 5.7 # rad of hip target per rad of torso lean
+    kd: 0.32 # rad of hip target per rad/s of torso rotation
+    max_correction: 0.5 # rad, cap on the hip target correction
     enabled: 1.0 # 0 = off, 1 = on
   ankle_balance: # COM position relative to the ankle and COM velocity adjust the ankle target
-    kp: 2.2 # rad of ankle target per m of COM offset behind (-) / ahead (+) of the ankle
-    kd: 0.2125 # rad of ankle target per m/s of COM velocity
+    kp: 0.2 # rad of ankle target per m of COM offset behind (-) / ahead (+) of the ankle
+    kd: 0.5 # rad of ankle target per m/s of COM velocity
+    com_offset_m: 0.08 # m, planned COM position ahead (+) / behind (-) of the hip
+    max_correction: 0.07 # rad, cap on the ankle target correction
     enabled: 1.0 # 0 = off, 1 = on
   stand_only: false # If true, no walking gait is applied.
   arm:
@@ -39,12 +43,14 @@ gait:
   start_up: # ramp up the gait from 0 to full over a few seconds
     stand_s: 1.0 # s, hold straight legs
     crouch_s: 1.0 # s, lower to hip_height_m
-    ramp_s: 2.0 # s, ramp step length, height, swing angle and arm swing from 0 to full
+    start_phase: 0.48 # 0-1, gait cycle phase the clock starts at (sets which leg steps first and when)
+    ramp_s: 1.6 # s, ramp step length, height, swing angle and arm swing from 0 to full
   push_off:
     start: 0.3 # fraction of stance (0 to 1) where push-off begins
-    extend_m: 0.0 # m, extra foot drop (leg lengthening) at the end of stance
-    back_m: 0.0 # m, extra backward foot reach at the end of stance
-    ankle_angle: 0.0 # rad, extra foot angle (+ toes down) at the end of stance
+    extend_m: 0.002 # m, extra foot drop (leg lengthening) at the end of stance
+    back_m: 0.015 # m, extra backward foot reach at the end of stance
+    ankle_angle: 0.09 # rad, extra foot angle (+ toes down) at the end of stance
+    unwind: 0.2 # fraction of swing over which the push-off blend unwinds after lift-off
   touchdown: # closed-loop touchdown (needs set_contacts)
     landing_start: 0.99 # swing progress where the foot starts matching the other leg's extension
     reach_start: 0.8 # swing progress where contact-seeking reach is allowed
@@ -52,4 +58,4 @@ gait:
     reach_rate_mps: 0.25 # m/s the reach grows while there is no contact
     reach_decay_s: 0.15 # s for the reach to unwind after touchdown
     hold_from: 0.97 # swing progress where the clock may wait for contact
-    hold_max_s: 0.15 # s the clock waits for contact before carrying on
+    hold_max_s: 0.144 # s the clock waits for contact before carrying on

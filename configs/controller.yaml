@@ -18,14 +18,14 @@ Controller:
     joints: [ankle_l, ankle_r]
     type: PD
     gains:
-      Kp: 1200.0 # > ~700 N·m/rad of gravity tipping torque
-      Kd: 3.0 # kept low: foot inertia ~0.02 kg·m², Kd·dt/I must stay < 2
+      Kp: 2100.0 # > ~700 N·m/rad of gravity tipping torque
+      Kd: 9.0 # foot inertia ~0.02 kg·m², Kd·dt/I must stay < 2 (here ~0.9). Too little damping makes the foot chatter
   PD_HIP: # keeps the torso upright over the legs
     joints: [hip_l, hip_r]
     type: PD
     gains:
-      Kp: 600.0
-      Kd: 40.0
+      Kp: 440.0
+      Kd: 54.0
   PD_ARM:
     joints: [shoulder_l, shoulder_r]
     type: PD
@@ -42,8 +42,8 @@ Controller:
     joints: [knee_l, knee_r]
     type: PID
     gains:
-      Kp: 800.0
-      Ki: 300.0
-      Kd: 40.0
+      Kp: 690.0
+      Ki: 126.0
+      Kd: 55.0
       integral_limit: 0.5 # Ki * limit = 150 N·m max integral contribution
 

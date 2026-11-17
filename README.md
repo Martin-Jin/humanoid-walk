@@ -6,15 +6,16 @@ methods, oscillator gaits) on one shared environment, and shows the result in a
 pygame viewer.
 
 **Status.** The physics simulation, the joint controllers, a hand-written gait
-controller and the pygame viewer exist. The gait does not yet walk reliably (the
-body falls after a few steps). The Gymnasium environment, rewards, PPO training
-and evaluation are not started.
+controller and the pygame viewer exist. The humanoid walks forward at about
+0.3 m/s and recovers from moderate pushes, until it reaches the end of the
+ground. The Gymnasium environment, rewards, PPO training and evaluation are not
+started.
 
 ## Features
 
 - 2D rigid-body humanoid simulated with `pymunk`, stepped at a fixed rate. *(done)*
 - PD and PID joint controllers, and a foot-trajectory gait controller with balance
-  feedback. *(done, being tuned)*
+  feedback. *(done)*
 - Pygame viewer with a manual joint panel, a reset button and mouse dragging. *(done)*
 - Gymnasium environment with a shaped walking reward. *(planned)*
 - Hand-written PPO training with checkpoints and resume. *(planned)*

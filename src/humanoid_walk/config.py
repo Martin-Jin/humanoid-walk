@@ -22,6 +22,9 @@ class WorldConfig:
     floor_y_m: float
     floor_friction: float
     physics_substeps: int
+    ground_thickness_m: float
+    spawn_x_frac: float  # humanoid spawns at this fraction of the screen width
+    max_body_speed_mps: float  # cap on any body's speed
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> Self:
@@ -56,6 +59,7 @@ class HumanoidConfig:
     arm_width_m: float
     foot_length_m: float
     foot_width_m: float
+    ankle_offset_m: float  # the ankle sits this far behind the foot centre
     head_radius_m: float
     torso_length_m: float
     torso_width_m: float
@@ -113,6 +117,7 @@ class AnkleGaitConfig:
 
     stance_angle: float
     swing_angle: float
+    pitch_ref: float  # 0-1, how much of the torso pitch is subtracted from the ankle target
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,6 +246,14 @@ def validate_gait(gait: GaitConfig, humanoid: HumanoidConfig) -> None:
         raise ValueError("balance_blend must be between 0 and 0.5.")
     if not 0.0 <= push["start"] < 1.0:
         raise ValueError("push_off.start must be in [0, 1).")
+    if not 0.0 <= gait.start_up["start_phase"] < 1.0:
+        raise ValueError("start_up.start_phase must be in [0, 1).")
+    if not 0.0 < push["unwind"] <= 1.0:
+        raise ValueError("push_off.unwind must be in (0, 1].")
+    if not 0.0 <= gait.ankle.pitch_ref <= 1.0:
+        raise ValueError("ankle.pitch_ref must be between 0 and 1.")
+    if gait.hip_balance["max_correction"] <= 0 or gait.ankle_balance["max_correction"] <= 0:
+        raise ValueError("balance max_correction values must be positive.")
     if not 0.0 <= td["landing_start"] < 1.0:
         raise ValueError("touchdown.landing_start must be in [0, 1).")
     if not td["reach_start"] < td["hold_from"] <= 1.0:
