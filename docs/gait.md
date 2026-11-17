@@ -113,7 +113,7 @@ Derived inside the functions: `half = L · walk / 2` (m), and `s` (0 to 1), the 
 
 Both ramps are a smoothstep, `x²(3 − 2x)`, which has zero slope at both ends.
 
-**Start phase.** The gait clock starts at `start_up.start_phase · period_s` when the crouch ends, so `start_phase` chooses which leg steps first and how soon. At 0 the left leg starts at touchdown and the right leg is 83% through its stance, so the right foot lifts almost at once, before the body has shifted its weight onto the left foot. That start was the main cause of falls in the first two steps. The configured value (0.48) starts both legs near the end of double support, so the body has already shifted over the stance leg when the first swing begins.
+**Start phase.** The gait clock starts at `start_up.start_phase · period_s` when the crouch ends, so `start_phase` chooses which leg steps first and how soon. At 0 the left leg starts at touchdown and the right leg is already late in stance (83% through with the old `duty_factor` of 0.6, 71% with 0.7), so the right foot lifts after about `0.1 · period_s`, while the body is still at rest and the step length is still near 0. The falls observed with that start were backward: the swing foot landed ahead of a COM that had not yet picked up speed, and the body tipped over it. The configured value (0.48) starts the right leg at the end of its swing, so it lands almost at once and carries weight through a double-support period (about `0.2 · period_s`) before the left foot lifts. This was found by search, not derived: the falls clustered in the first steps, and this start survived. It has not been compared against changing only the start phase.
 
 ### 3.2 The clock
 
