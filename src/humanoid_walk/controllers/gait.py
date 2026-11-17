@@ -104,6 +104,11 @@ class GaitController:
         self.max_hip_balance = g.hip_balance["max_correction"]  # rad, cap on the correction
         self.max_ankle_balance = g.ankle_balance["max_correction"]  # rad, cap on the correction
 
+        # Foot placement: land further ahead when the COM is faster than planned
+        self.placement_gain = g.foot_placement["gain"]
+        self.placement_max = g.foot_placement["max_m"]
+        self.placement_deadband = g.foot_placement["deadband_mps"]
+
         # Touchdown tuning
         td = g.touchdown
         self.landing_start = td["landing_start"]
@@ -150,6 +155,10 @@ class GaitController:
         self.contacts: dict[JointName, bool] | None = None  # None = open loop
         self.reach = {leg.ankle: 0.0 for leg in self.legs}
         self.wait_s = 0.0
+        # Foot placement: landing shift (m, in the gait frame) of the swing in progress, and the
+        # one the current stance started with (so the stance and the next lift-off stay continuous)
+        self.swing_shift = {leg.ankle: 0.0 for leg in self.legs}
+        self.stance_shift = {leg.ankle: 0.0 for leg in self.legs}
 
     def reset(self) -> None:
         """Restart the startup sequence, the gait clock and all measured state."""
@@ -377,15 +386,35 @@ class GaitController:
         push = self._push_off(in_stance, s)
         couple = self._support_coupling(leg, in_stance, s, hip_h)
         if in_stance:
-            x = half - length * s
+            self.stance_shift[leg.ankle] = self.swing_shift[leg.ankle]  # latched at touchdown
+            x = half + self.stance_shift[leg.ankle] - length * s
             y = hip_h + self.push_extend * push
         else:
-            x = -half * math.cos(math.pi * s)
+            lift_x = -half + self.stance_shift[leg.ankle]
+            land_x = half + self._landing_shift(leg)
+            x = lift_x + (land_x - lift_x) * (1.0 - math.cos(math.pi * s)) / 2.0
             y = hip_h - step_height * math.sin(math.pi * s) + self.push_extend * push
         y += couple + self.reach[leg.ankle]
         y = min(y, self._y_limit(hip_h))  # keep away from the straight-leg singularity
         x -= self.push_back * push  # lead the foot target backward in late stance
         return self.direction * x + touchdown_offset, y
+
+    def _landing_shift(self, leg: Leg) -> float:
+        """How far (m, gait frame) the swing foot should land ahead of the planned spot.
+
+        When the COM is faster than planned the capture point (where the COM would come to
+        rest on a point foot) is ahead of the plan, so the foot lands further ahead."""
+        if self.placement_gain <= 0.0:
+            return 0.0
+        g = self.gait
+        omega = math.sqrt(self.gravity / max(self.com_height, 0.1))
+        vx_ref = self.direction * g.step_length_m * self.walk / (g.duty_factor * g.period_s)
+        error = self.com_vx - vx_ref
+        error = math.copysign(max(abs(error) - self.placement_deadband, 0.0), error)
+        shift = self.placement_gain * error / omega * self.walk
+        shift = _clamp(self.direction * shift, -self.placement_max, self.placement_max)
+        self.swing_shift[leg.ankle] = shift
+        return shift
 
     def _leg_ik(self, x: float, y: float) -> tuple[float, float]:
         """Return (hip, knee) in rad for a foot target (x forward, y down) from the hip."""

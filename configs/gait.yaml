@@ -51,6 +51,10 @@ gait:
     back_m: 0.015 # m, extra backward foot reach at the end of stance
     ankle_angle: 0.09 # rad, extra foot angle (+ toes down) at the end of stance
     unwind: 0.2 # fraction of swing over which the push-off blend unwinds after lift-off
+  foot_placement: # shift where the swing foot lands by how much faster the COM is than planned
+    gain: 0.7 # m of landing shift per m of capture-point error (COM speed error / omega). 0 = off
+    max_m: 0.1 # m, largest landing shift either way
+    deadband_mps: 0.05 # m/s, COM speed errors smaller than this are ignored (keeps normal walking untouched)
   touchdown: # closed-loop touchdown (needs set_contacts)
     landing_start: 0.99 # swing progress where the foot starts matching the other leg's extension
     reach_start: 0.8 # swing progress where contact-seeking reach is allowed

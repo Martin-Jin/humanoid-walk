@@ -65,6 +65,22 @@ class GaitTests(unittest.TestCase):
         right_later = gait.act({})[JointName.HIP_R]
         self.assertAlmostEqual(left, right_later)
 
+    def test_foot_lands_further_ahead_when_the_com_is_fast(self):
+        gait = walking_gait()
+        gait.crouch, gait.walk = 1.0, 1.0
+        left = gait.legs[0]
+        g = gait.gait
+        planned = gait.direction * g.step_length_m / (g.duty_factor * g.period_s)
+        landing = {}
+        for name, vx in (("planned", planned), ("fast", planned + 0.4), ("slow", planned - 0.4)):
+            gait.set_com({JointName.ANKLE_L: 0.0, JointName.ANKLE_R: 0.0}, vx, 0.9)
+            landing[name] = gait._foot_target(left, False, 1.0, 0.0, 0.0)[0]
+        self.assertGreater(landing["fast"], landing["planned"])
+        self.assertLess(landing["slow"], landing["planned"])
+        self.assertLessEqual(
+            landing["fast"] - landing["planned"], gait.placement_max + 1e-9
+        )
+
     def test_reset_restarts_clock_and_startup(self):
         gait = walking_gait()
         start = GaitController(load_config()).time_s

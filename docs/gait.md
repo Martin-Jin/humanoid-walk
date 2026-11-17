@@ -90,6 +90,7 @@ Every setting in `gait.yaml`. Values live in the YAML only. Lengths are in m, ti
 | `start_up.*`                      |        | `stand_s`, `crouch_s`, `ramp_s` (s), `start_phase` (0 to 1) (section 3.1)           |
 | `push_off.*`                      |        | `start`, `extend_m`, `back_m`, `ankle_angle`, `unwind` (section 4.3)                |
 | `touchdown.*`                     |        | `landing_start`, `reach_*`, `hold_*` (sections 3.3 and 4.4)                         |
+| `foot_placement.*`                |        | `gain`, `max_m`, `deadband_mps` (section 4.5)                                       |
 
 `direction` (+1 forward, −1 backward) is a constructor argument of `GaitController`, not a config key. `App` never changes it from +1.
 
@@ -242,6 +243,33 @@ The blend scales three things:
 ### 4.4 Contact-seeking reach
 
 Needs `set_contacts`. In late swing (`s ≥ touchdown.reach_start`) with no contact, the foot target drops further at `reach_rate_mps`, up to `reach_max_m`. After touchdown (or early in the next swing) it unwinds over `reach_decay_s`. With `reach_max_m = 0` this is off.
+
+### 4.5 Foot placement
+
+**Why it exists.** A walker stays up mainly by putting its next foot where the body is heading. If a push makes the COM faster than planned, a foot that still lands at the planned spot is too far back to catch it.
+
+**What it does.** During swing the landing spot is shifted by the capture point error (the COM speed error divided by `ω`, where `ω = √(g / com_height)`):
+
+`shift = clamp(gain · (com_vx − vx_ref − deadband) / ω · walk, ±max_m)`
+
+A COM that is faster than planned lands the foot further ahead, which brakes the body. A slower COM lands it nearer. `vx_ref` is the planned speed (section 7.3). Speed errors smaller than `deadband_mps` are ignored, so normal walking is left as tuned.
+
+**How it works in code** (`_foot_target`, `_landing_shift`). The swing path starts at the lift-off spot and ends at the shifted landing spot, so the shift fades in smoothly:
+
+```
+lift_x = −half + stance_shift          # where the last stance ended
+land_x =  half + shift                 # shift is recomputed every frame of the swing
+x = lift_x + (land_x − lift_x) · (1 − cos(πs)) / 2
+```
+
+The shift at the end of the swing is latched when the foot lands. The stance then sweeps from `half + stance_shift` at the same speed as before, so the shift moves the stance forward or back and does not change the walking speed.
+
+**Why this approach.** Making the stance sweep longer instead would also speed the body up, and a faster body needs an even longer step. The shifted stance has no such feedback.
+
+**Limitations.**
+- The COM speed is read once per frame with no filtering, so it includes the normal speed ripple within a stride. The deadband hides that ripple.
+- In simulation it improved recovery from forward pushes (18 of 30 whole-body pushes survived against 13 without it), with little change for backward pushes (15 against 14).
+- The shift is capped by `max_m` and by the leg reach (`validate_gait` includes it).
 
 ## 5. Inverse kinematics
 
@@ -414,7 +442,7 @@ The leading minus is there because the shoulder follows the same convention as t
 - **Balance runs in stance only,** faded in and out by section 7.1, so it does not disturb the swing arch.
 - **One clock for both legs.** The touchdown hold and the gate freeze both legs together, including a leg in late stance.
 - **Weight shift is implicit.** There is no explicit weight-shift state. The clock simply starts at `start_phase` (section 3.1), and the balance terms do the rest.
-- **Foot placement is open loop.** The foot lands where the clock says, whatever the COM is doing. A push is absorbed by the balance terms and the gate, not by moving the next step. The configured gait survives torso pushes of ±0.5 m/s in simulation, but a larger push topples it.
+- **Foot placement only reacts to COM speed.** It does not look at the COM position, and it does not help much against a backward push (section 4.5).
 
 ## 11. Tuning
 

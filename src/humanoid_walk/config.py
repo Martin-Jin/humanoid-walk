@@ -151,6 +151,7 @@ class GaitConfig:
     start_up: dict[str, float]  # startup sequence durations in seconds
     push_off: dict[str, float]  # late-stance leg extension and ankle plantarflexion
     touchdown: dict[str, float]  # closed-loop touchdown (contact-seeking reach, clock hold)
+    foot_placement: dict[str, float]  # shift the landing spot by the COM speed error
 
     def __post_init__(self):
         if self.period_s <= 0:
@@ -223,7 +224,7 @@ def validate_gait(gait: GaitConfig, humanoid: HumanoidConfig) -> None:
     # Reach: worst-case foot position relative to the hip
     max_offset = max(abs(gait.touchdown_offset_m), abs(gait.backward.touchdown_offset_m))
     drop = gait.hip_height_m + push["extend_m"] + td["reach_max_m"]
-    reach_x = gait.step_length_m / 2 + max_offset + push["back_m"]
+    reach_x = gait.step_length_m / 2 + max_offset + push["back_m"] + gait.foot_placement["max_m"]
     reach = math.hypot(reach_x, drop)
 
     if drop > limit:
@@ -244,6 +245,8 @@ def validate_gait(gait: GaitConfig, humanoid: HumanoidConfig) -> None:
         raise ValueError("duty_factor must be between 0 and 1.")
     if not 0.0 <= gait.balance_blend <= 0.5:
         raise ValueError("balance_blend must be between 0 and 0.5.")
+    if any(gait.foot_placement[k] < 0 for k in ("gain", "max_m", "deadband_mps")):
+        raise ValueError("foot_placement gain, max_m and deadband_mps must be >= 0.")
     if not 0.0 <= push["start"] < 1.0:
         raise ValueError("push_off.start must be in [0, 1).")
     if not 0.0 <= gait.start_up["start_phase"] < 1.0:
