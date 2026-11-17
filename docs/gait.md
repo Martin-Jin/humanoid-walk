@@ -84,7 +84,7 @@ Every setting in `gait.yaml`. Values live in the YAML only. Lengths are in m, ti
 | `legs.left/right.phase_offset`    | 0 to 1 | Per-leg offset as a fraction of the cycle. Loaded as `phase_offsets` in the config  |
 | `backward.*`                      | m      | `step_height_m` and `touchdown_offset_m` used when `direction = −1`                 |
 | `hip_balance.*`                   |        | `kp`, `kd`, `max_correction` (rad cap), `enabled` (section 7.2)                     |
-| `ankle_balance.*`                 |        | `kp`, `kd`, `com_offset_m`, `max_correction` (rad cap), `enabled` (section 7.3)     |
+| `ankle_balance.*`                 |        | `kp`, `kd`, `planned_com`, `com_offset_m`, `max_correction` (rad cap), `enabled` (7.3) |
 | `stand_only`                      | bool   | If true, no walking gait is applied                                                 |
 | `arm.*`                           |        | `amplitude` (rad), `enabled` (section 8)                                            |
 | `balance_gate.*`                  |        | `enabled`, `stop_margin`, `resume_margin`, `blend_s` (section 3.4)                  |
@@ -391,7 +391,7 @@ The ankle adds a second correction that acts on the whole body, using the COM po
 | -------- | ------------------------------------------------------------------------------------------- |
 | `com_dx` | COM x minus that ankle's x, + when the COM is ahead (from `set_com`)                        |
 | `com_vx` | COM x velocity, + when moving forward                                                       |
-| `dx_ref` | Planned COM position relative to this ankle. The code uses `−x`, the COM directly over the hip |
+| `dx_ref` | Planned COM position relative to this ankle: `planned_com_x − x + com_offset_m` (see below)    |
 | `vx_ref` | Planned COM speed: `direction · L · walk / (duty_factor · T)`                               |
 
 `balance` is passed into `_ankle_target`. The ankle uses `hip0` rather than the balance-corrected hip.
@@ -401,7 +401,11 @@ The ankle adds a second correction that acts on the whole body, using the COM po
 - **COM ahead.** `balance` is positive and the target moves toes-down. The foot is planted, so the ankle torque on the foot (clockwise) is matched by the opposite torque on the shin. This rotates the shin and the body above it backward, which brings the COM back over the ankle.
 - **COM behind.** `balance` is negative and the target moves toes-up. The shin and body are pushed forward.
 
-**`com_offset_m`.** The planned COM is not over the hip. In the standing pose the whole-body COM sits about 0.07 m ahead of the ankle, because the knees are flexed and the thighs and shins lie forward of the hip-ankle line. So `dx_ref = −x + com_offset_m`. With the offset at 0 the correction sat at its cap from the first frame and had no headroom to correct a forward lean. The offset is a constant, so it is only right for the configured pose.
+**Planned COM.** The whole-body COM is not over the hip: with the knees flexed the thighs and shins lie forward of the hip-ankle line. With `planned_com = 1`, `_planned_com_x` computes the COM relative to the hip each frame from the planned pose. The torso and head stand upright over the hip. The arms and each leg link are placed by forward kinematics (positions from joint angles) from the planned angles, with each link's mass at the middle of its length. So `dx_ref` follows the pose through the stride (which leg is forward, how far the knees bend, where the arms are). With `planned_com = 0` it falls back to a constant, `−x + com_offset_m`.
+
+**Limitation: the plan misses the real pose by about 0.1 m.** The joints do not reach their targets under load (section 6), so the real COM sits further ahead than the planned one. In the standing pose the plan predicted 0.026 m ahead of the ankle and 0.13 m was measured. `com_offset_m` (0.054) is a trim that absorbs this, and it is a constant, so it is only exact for the configured pose.
+
+**What it changes in practice.** Very little. The position gain `ankle_balance.kp` is small (0.2 rad/m), so a 0.05 m error in the reference moves the ankle target by about 0.01 rad. In simulation the planned COM gave the same results as the constant offset, including when `hip_height_m` was changed from 0.80 to 0.88. It matters more if `kp` is raised.
 
 **Other limits.**
 

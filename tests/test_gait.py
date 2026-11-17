@@ -100,6 +100,20 @@ class GaitTests(unittest.TestCase):
         target = gait.act(states)[JointName.ANKLE_L]
         self.assertAlmostEqual(target, -0.30, places=6)
 
+    def test_planned_com_follows_the_pose(self):
+        """The planned COM moves forward of the hip as the knees bend, and back with the arms."""
+        gait = walking_gait()
+        gait.crouch, gait.walk = 0.0, 0.0
+        plans = {leg: gait._leg_plan(leg) for leg in gait.legs}
+        targets = {arm.shoulder: 0.0 for arm in gait.arms}
+        straight = gait._planned_com_x(plans, targets)
+        gait.crouch = 1.0
+        plans = {leg: gait._leg_plan(leg) for leg in gait.legs}
+        crouched = gait._planned_com_x(plans, targets)
+        self.assertGreater(crouched, straight)
+        arms_back = {arm.shoulder: 1.0 for arm in gait.arms}
+        self.assertLess(gait._planned_com_x(plans, arms_back), crouched)
+
     def test_reset_restarts_clock_and_startup(self):
         gait = walking_gait()
         start = GaitController(load_config()).time_s

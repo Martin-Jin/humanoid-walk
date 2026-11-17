@@ -29,7 +29,8 @@ gait:
   ankle_balance: # COM position relative to the ankle and COM velocity adjust the ankle target
     kp: 0.2 # rad of ankle target per m of COM offset behind (-) / ahead (+) of the ankle
     kd: 0.5 # rad of ankle target per m/s of COM velocity
-    com_offset_m: 0.08 # m, planned COM position ahead (+) / behind (-) of the hip
+    planned_com: 1.0 # 0 = plan the COM at com_offset_m from the hip, 1 = compute it every frame from the planned pose and the body masses
+    com_offset_m: 0.054 # m, planned COM position ahead (+) / behind (-) of the hip (a trim when planned_com is 1)
     max_correction: 0.07 # rad, cap on the ankle target correction
     enabled: 1.0 # 0 = off, 1 = on
   stand_only: false # If true, no walking gait is applied.

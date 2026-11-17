@@ -30,6 +30,19 @@ class Leg:
     phase_offset: float
 
 
+@dataclass(frozen=True)
+class LegPlan:
+    """One leg's plan for this frame: foot (x, y) from the hip, nominal hip and knee, and state."""
+
+    x: float
+    y: float
+    hip: float
+    knee: float
+    in_stance: bool
+    s: float
+    standing: bool
+
+
 def _clamp(v: float, lo: float, hi: float) -> float:
     return min(max(v, lo), hi)
 
@@ -99,6 +112,14 @@ class GaitController:
         self.ankle_balance = g.ankle_balance["enabled"] > 0
         # Static shift of the planned COM from over the hip, m (+ = ahead of the hip)
         self.com_offset = g.ankle_balance["com_offset_m"]
+        self.plan_com = g.ankle_balance["planned_com"] > 0
+        masses = h.part_masses_kg
+        self.mass_total = h.mass_kg
+        self.mass_upper = masses["head"] + masses["torso"]  # upright over the hip
+        self.mass_arm, self.mass_thigh = masses["arm"], masses["thigh"]
+        self.mass_shin, self.mass_foot = masses["shin"], masses["foot"]
+        self.arm_half = h.arm_length_m / 2
+        self.foot_ahead_of_ankle = h.ankle_offset_m  # foot centre ahead of the ankle pivot
         self.balance_blend = g.balance_blend
 
         self.max_hip_balance = g.hip_balance["max_correction"]  # rad, cap on the correction
@@ -292,10 +313,12 @@ class GaitController:
         self.joint_states = joint_states
         self.crouch, self.walk = self._startup()
         targets: JointTargets = {JointName.NECK: 0.0}
-        for leg in self.legs:
-            targets.update(self._leg_targets(leg))
         for arm in self.arms:
             targets.update(self._arm_target(arm))
+        plans = {leg: self._leg_plan(leg) for leg in self.legs}
+        com_x = self._planned_com_x(plans, targets) if self.plan_com else None
+        for leg in self.legs:
+            targets.update(self._leg_targets(leg, plans[leg], com_x))
         return targets
 
     def _hip_height(self) -> float:
@@ -343,18 +366,40 @@ class GaitController:
             return drop
         return drop * _ramp(s, self.landing_start, 1.0 - self.landing_start)
 
-    def _leg_targets(self, leg: Leg) -> JointTargets:
-        """Calculate the hip, knee and ankle targets for one leg."""
+    def _leg_plan(self, leg: Leg) -> LegPlan:
+        """Where the foot should be, and the nominal hip and knee that put it there."""
         g = self.gait
         backward = self.direction < 0
         step_height = (g.backward.step_height_m if backward else g.step_height_m) * self.walk
         offset = g.backward.touchdown_offset_m if backward else g.touchdown_offset_m
-
         in_stance, s, standing = self._leg_state(leg)
         x, y = self._foot_target(leg, in_stance, s, step_height, offset)
+        hip0, knee0 = self._leg_ik(x, y)  # nominal IK, so the ankle ignores hip balance
+        return LegPlan(x, y, hip0, knee0, in_stance, s, standing)
 
-        # Nominal IK, used for the ankle so it is unaffected by hip balance.
-        hip0, knee0 = self._leg_ik(x, y)
+    def _planned_com_x(self, plans: dict[Leg, LegPlan], targets: JointTargets) -> float:
+        """Whole-body COM x relative to the hip (m, + forward) if every joint reaches its plan.
+
+        The torso and head stand upright over the hip. The arms and legs are placed by forward
+        kinematics from the planned angles, each link at the middle of its length."""
+        moment = 0.0
+        for arm in self.arms:  # + shoulder swings the arm backward
+            moment += self.mass_arm * -self.arm_half * math.sin(targets[arm.shoulder])
+        for plan in plans.values():
+            thigh_dir = -plan.hip  # forward angle from straight down
+            shin_dir = -plan.hip - plan.knee
+            knee_x = self.thigh * math.sin(thigh_dir)
+            ankle_x = knee_x + self.shin * math.sin(shin_dir)
+            moment += self.mass_thigh * (self.thigh / 2) * math.sin(thigh_dir)
+            moment += self.mass_shin * (knee_x + (self.shin / 2) * math.sin(shin_dir))
+            moment += self.mass_foot * (ankle_x + self.foot_ahead_of_ankle)
+        return moment / self.mass_total
+
+    def _leg_targets(self, leg: Leg, plan: LegPlan, planned_com_x: float | None) -> JointTargets:
+        """Calculate the hip, knee and ankle targets for one leg."""
+        g = self.gait
+        x, hip0, knee0 = plan.x, plan.hip, plan.knee
+        in_stance, s, standing = plan.in_stance, plan.s, plan.standing
 
         w = self._balance_weight(in_stance, s, standing)
         delta = 0.0
@@ -366,8 +411,9 @@ class GaitController:
 
         balance = 0.0
         if self.ankle_balance:
-            # Planned COM is over the hip, so relative to this ankle it should sit at -x.
-            dx_ref = -x + self.com_offset
+            # Planned COM relative to this ankle: over the hip (-x), or from the planned pose.
+            com_x = 0.0 if planned_com_x is None else planned_com_x
+            dx_ref = com_x - x + self.com_offset
             vx_ref = self.direction * g.step_length_m * self.walk / (g.duty_factor * g.period_s)
             balance = w * (
                 self.ankle_balance_kp * (self.com_dx[leg.ankle] - dx_ref)
