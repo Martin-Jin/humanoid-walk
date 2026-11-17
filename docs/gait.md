@@ -79,7 +79,8 @@ Every setting in `gait.yaml`. Values live in the YAML only. Lengths are in m, ti
 | `balance_blend`                   | 0 to ½ | Fraction of stance over which balance terms fade in and out                         |
 | `ankle.stance_angle`              | rad    | Foot angle relative to the ground in stance (0 is flat)                             |
 | `ankle.swing_angle`               | rad    | Peak foot angle relative to the ground in swing (negative is toes up)               |
-| `ankle.pitch_ref`                 | 0 to 1 | Share of the torso pitch subtracted from the ankle target (section 6)               |
+| `ankle.pitch_ref`                 | 0 to 1 | Share of the torso pitch subtracted from the planned ankle target (section 6)       |
+| `ankle.measured_ref`              | 0 to 1 | Blend from the planned hip and knee to the measured ones (section 6)                |
 | `legs.left/right.phase_offset`    | 0 to 1 | Per-leg offset as a fraction of the cycle. Loaded as `phase_offsets` in the config  |
 | `backward.*`                      | m      | `step_height_m` and `touchdown_offset_m` used when `direction = −1`                 |
 | `hip_balance.*`                   |        | `kp`, `kd`, `max_correction` (rad cap), `enabled` (section 7.2)                     |
@@ -330,9 +331,14 @@ The code drops `torso_pitch` and uses the nominal `hip0` (before the hip balance
 
 **Step 3: clamp** the result to the ankle joint limits.
 
-**`pitch_ref`.** The ankle target also subtracts `pitch_ref · torso_pitch`, so with `pitch_ref = 1` the foot angle follows the ground when the torso leans. The configured value is small (0.17).
+**Two ways to reference the foot angle.** The foot's world angle is `torso_pitch + hip + knee + ankle`, so a flat foot needs `ankle = foot − torso_pitch − hip − knee`. The code can take the hip and knee from either source:
 
-**Limitation: the foot is not fully ground-referenced.** The hip balance shift is not subtracted, so a hip balance shift of δ rotates a planted foot by up to δ, and with `pitch_ref < 1` a torso lean still rotates the foot. The hip and ankle terms were decoupled on purpose (so hip balance does not change the ankle balance term), but this stops the ankle holding the foot exactly flat. In the original configuration the standing foot sat about 0.14 rad toes down with the heel lifted.
+- **Planned** (`measured_ref = 0`): the planned `hip0` and knee, plus `pitch_ref` of the torso pitch. This trusts the leg to follow its targets.
+- **Measured** (`measured_ref = 1`): the joint angles as they really are, plus the full torso pitch. The ankle then holds the foot flat whatever the other joints do. `measured_ref` blends between the two.
+
+**Limitation: the stance foot is not flat, and flattening it costs robustness.** In the configured gait the stance foot sits about 0.13 rad toes-down for the whole stance, even right after touchdown. The cause is steady tracking error under load, not the hip balance shift: in mid-stance the hip sits about 0.09 rad behind its target and the knee about 0.07 rad past its, because the PD gains are finite and the body weighs on them. Subtracting the hip balance shift made things worse, because with the foot planted the ankle then pushes against the hip balance.
+
+With the measured reference the gait falls within a few seconds unless every gain is retuned. A search that required the stance foot to stay within 0.06 rad of flat did find gaits that walk, but they survived none of the backward pushes and fewer forward ones than the configured gait. So `measured_ref` is 0. The tilted foot is part of what makes the tuned gait robust: it acts as a second balance strategy, and the toe-down ankle torque pushes the body back.
 
 The body config's dorsiflexion limit must be wide enough for the knee flexion the gait needs. More knee flexion (a higher `step_height_m` or a lower `hip_height_m`) needs more dorsiflexion, otherwise the target clamps and the toes may drag in early swing.
 

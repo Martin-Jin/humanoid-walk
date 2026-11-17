@@ -4,7 +4,7 @@ from dataclasses import replace
 
 from humanoid_walk.config import load_config
 from humanoid_walk.controllers.gait import GaitController
-from humanoid_walk.controllers.joint_state import JointName
+from humanoid_walk.controllers.joint_state import JointName, JointState
 
 
 def walking_gait(config=None) -> GaitController:
@@ -80,6 +80,25 @@ class GaitTests(unittest.TestCase):
         self.assertLessEqual(
             landing["fast"] - landing["planned"], gait.placement_max + 1e-9
         )
+
+    def test_ankle_can_follow_the_measured_joints(self):
+        """With measured_ref = 1 the ankle target cancels the joint angles as they really are."""
+        config = load_config()
+        ankle = replace(config.gait.ankle, measured_ref=1.0, pitch_ref=0.0)
+        off = {**config.gait.ankle_balance, "enabled": 0.0}
+        hip_off = {**config.gait.hip_balance, "enabled": 0.0}
+        config = replace(
+            config,
+            gait=replace(config.gait, ankle=ankle, ankle_balance=off, hip_balance=hip_off),
+        )
+        gait = walking_gait(config)
+        gait.time_s = 0.01  # left leg just landed: no push-off yet
+        states = {
+            JointName.HIP_L: JointState(current=0.10),
+            JointName.KNEE_L: JointState(current=0.20),
+        }
+        target = gait.act(states)[JointName.ANKLE_L]
+        self.assertAlmostEqual(target, -0.30, places=6)
 
     def test_reset_restarts_clock_and_startup(self):
         gait = walking_gait()

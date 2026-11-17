@@ -13,7 +13,8 @@ gait:
   ankle: # foot angles relative to the ground, not joint angles
     stance_angle: 0.0 # rad, foot angle in stance (0 = flat)
     swing_angle: -0.01 # rad, peak foot angle in swing (negative = toes up)
-    pitch_ref: 0.17 # 0-1, share of the torso pitch subtracted from the ankle target (1 = foot angle follows the ground)
+    pitch_ref: 0.17 # 0-1, share of the torso pitch subtracted from the planned ankle target
+    measured_ref: 0.0 # 0-1, blend from the planned hip and knee angles to the measured ones and the full torso pitch (1 = the foot angle follows the ground whatever the joints do). Above 0 needs a retune
   legs:
     left: { phase_offset: 0.0 } # dimensionless (0-1), fraction of the cycle
     right: { phase_offset: 0.5 } # dimensionless (0-1), half a cycle behind left

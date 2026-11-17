@@ -155,6 +155,7 @@ class GaitController:
         self.contacts: dict[JointName, bool] | None = None  # None = open loop
         self.reach = {leg.ankle: 0.0 for leg in self.legs}
         self.wait_s = 0.0
+        self.joint_states: JointStates = {}  # measured joints from the latest act()
         # Foot placement: landing shift (m, in the gait frame) of the swing in progress, and the
         # one the current stance started with (so the stance and the next lift-off stay continuous)
         self.swing_shift = {leg.ankle: 0.0 for leg in self.legs}
@@ -288,6 +289,7 @@ class GaitController:
     def act(self, joint_states: JointStates) -> JointTargets:
         """Get joint targets for the current time. (Joint states are unused: the
         controller works from the clock and the set_* inputs.)"""
+        self.joint_states = joint_states
         self.crouch, self.walk = self._startup()
         targets: JointTargets = {JointName.NECK: 0.0}
         for leg in self.legs:
@@ -372,7 +374,8 @@ class GaitController:
                 + self.ankle_balance_kd * (self.com_vx - vx_ref)
             )
             balance = _clamp(balance, -self.max_ankle_balance, self.max_ankle_balance)
-        ankle = self._ankle_target(hip0, knee0, in_stance, s, balance)
+        measured = self._measured_chain(leg, hip0, knee0)
+        ankle = self._ankle_target(hip0, knee0, in_stance, s, balance, measured)
         return {leg.hip: hip, leg.knee: knee, leg.ankle: ankle}
 
     def _foot_target(
@@ -427,16 +430,35 @@ class GaitController:
         knee = math.pi - gamma  # + knee = flexion, 0 = straight
         return hip, knee
 
+    def _measured_chain(self, leg: Leg, hip0: float, knee0: float) -> float:
+        """Torso pitch + hip + knee from the measured joints, or from the plan if unknown."""
+        state = self.joint_states
+        if leg.hip not in state or leg.knee not in state:
+            return self.torso_pitch + hip0 + knee0
+        return self.torso_pitch + state[leg.hip].current + state[leg.knee].current
+
     def _ankle_target(
-        self, hip: float, knee: float, in_stance: bool, s: float, balance: float = 0.0
+        self,
+        hip: float,
+        knee: float,
+        in_stance: bool,
+        s: float,
+        balance: float = 0.0,
+        measured_chain: float | None = None,
     ) -> float:
         """Ankle joint target in rad (+ toes down, - toes up)."""
         a = self.gait.ankle
         foot = a.stance_angle if in_stance else a.swing_angle * self.walk * math.sin(math.pi * s)
         foot += self.push_ankle * self._push_off(in_stance, s)
         lo, hi = self.ankle_limits
-        foot -= a.pitch_ref * self.torso_pitch  # the chain below the torso rotates with it
-        return _clamp(foot - hip - knee + balance, lo, hi)
+        # The foot angle in the world is torso pitch + hip + knee + ankle. The planned chain
+        # trusts the leg to follow its targets, the measured one follows the joints as they are.
+        if measured_chain is None or a.measured_ref == 0.0:
+            foot -= a.pitch_ref * self.torso_pitch
+            return _clamp(foot - hip - knee + balance, lo, hi)
+        planned = a.pitch_ref * self.torso_pitch + hip + knee
+        chain = (1.0 - a.measured_ref) * planned + a.measured_ref * measured_chain
+        return _clamp(foot - chain + balance, lo, hi)
 
     def _arm_target(self, arm: Arm) -> JointTargets:
         """Shoulder target in rad. Swings opposite to the same-side leg. + = arm back."""

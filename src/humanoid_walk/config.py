@@ -118,6 +118,7 @@ class AnkleGaitConfig:
     stance_angle: float
     swing_angle: float
     pitch_ref: float  # 0-1, how much of the torso pitch is subtracted from the ankle target
+    measured_ref: float  # 0-1, blend from the planned hip and knee to the measured ones
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,8 +254,8 @@ def validate_gait(gait: GaitConfig, humanoid: HumanoidConfig) -> None:
         raise ValueError("start_up.start_phase must be in [0, 1).")
     if not 0.0 < push["unwind"] <= 1.0:
         raise ValueError("push_off.unwind must be in (0, 1].")
-    if not 0.0 <= gait.ankle.pitch_ref <= 1.0:
-        raise ValueError("ankle.pitch_ref must be between 0 and 1.")
+    if not 0.0 <= gait.ankle.pitch_ref <= 1.0 or not 0.0 <= gait.ankle.measured_ref <= 1.0:
+        raise ValueError("ankle.pitch_ref and ankle.measured_ref must be between 0 and 1.")
     if gait.hip_balance["max_correction"] <= 0 or gait.ankle_balance["max_correction"] <= 0:
         raise ValueError("balance max_correction values must be positive.")
     if not 0.0 <= td["landing_start"] < 1.0:
