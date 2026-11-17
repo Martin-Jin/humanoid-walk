@@ -57,6 +57,8 @@ propulsion without balance.
 
 **Ground.** One static segment across the screen width with `world.floor_friction` and `world.ground_thickness_m`. Its top surface is half the thickness above `floor_y_px`. The humanoid spawns just above it, at `world.spawn_x_frac` of the screen width.
 
+**Foot contact.** `Simulation.feet_on_ground()` says whether each foot is on the ground. A foot counts as down for `world.contact_hold_s` after its last pymunk contact, which bridges a single physics step where a resting contact drops out.
+
 **Speed cap.** `world.max_body_speed_mps` limits the speed of every body, which keeps the solver stable if something goes wrong.
 
 ## Actions

@@ -9,5 +9,6 @@ world:
   physics_substeps: 8 # physics steps per frame; torques are recomputed each one
   ground_thickness_m: 0.2 # m, thickness of the static ground segment
   spawn_x_frac: 0.2 # humanoid spawns at this fraction of the screen width
+  contact_hold_s: 0.03 # s, a foot counts as on the ground this long after it last touched
   max_body_speed_mps: 10.0 # m/s, cap on the speed of any body (keeps the solver stable)
 

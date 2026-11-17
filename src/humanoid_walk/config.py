@@ -25,6 +25,7 @@ class WorldConfig:
     ground_thickness_m: float
     spawn_x_frac: float  # humanoid spawns at this fraction of the screen width
     max_body_speed_mps: float  # cap on any body's speed
+    contact_hold_s: float  # a foot counts as on the ground this long after it last touched
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> Self:

@@ -1,6 +1,8 @@
 """Defines the physics for the game using pymunk.
 This includes the simulation of the humanoid and environment."""
 
+import math
+
 import pymunk
 
 from humanoid_walk.config import Config
@@ -32,6 +34,8 @@ class Simulation:
         self.config = config
         self.ppm = config.rendering.pixels_per_meter
         self.humanoid: list[pymunk.Body] = []
+        self.time_s = 0.0  # simulated time, advanced by every physics step
+        self._last_contact: dict[pymunk.Body, float] = {}  # body -> time it last touched
         self._new_space()
         self.substeps = (
             config.world.physics_substeps
@@ -47,6 +51,7 @@ class Simulation:
     def reset(self):
         """Discard all bodies and joints and rebuild the humanoid from scratch."""
         self._new_space()
+        self._last_contact = {}
         self.setup()
 
     def px(self, meters: float) -> float:
@@ -305,6 +310,10 @@ class Simulation:
     def step(self):
         """Advance the simulation by one substep."""
         self.space.step(self.sub_dt)
+        self.time_s += self.sub_dt
+        for foot in (self.foot_l, self.foot_r):
+            if self._touching(foot):
+                self._last_contact[foot] = self.time_s
 
     def com_world(self) -> tuple[float, float]:
         """Whole-body centre of mass in world pixels (x, y)."""
@@ -381,12 +390,20 @@ class Simulation:
             self.apply_torques(torques)
             self.step()
 
+    @staticmethod
+    def _touching(body: pymunk.Body) -> bool:
+        hits = []
+        body.each_arbiter(hits.append)
+        return len(hits) > 0
+
     def feet_on_ground(self) -> tuple[bool, bool]:
-        """Whether each foot is touching anything (the ground, in practice)."""
+        """Whether each foot is on the ground (the only thing it can touch).
 
-        def touching(body):
-            hits = []
-            body.each_arbiter(hits.append)
-            return len(hits) > 0
+        A resting foot only holds a pymunk contact in some physics steps, so a foot counts
+        as down for `world.contact_hold_s` after its last contact."""
+        hold = self.config.world.contact_hold_s
 
-        return touching(self.foot_l), touching(self.foot_r)
+        def down(body):
+            return self.time_s - self._last_contact.get(body, -math.inf) <= hold
+
+        return down(self.foot_l), down(self.foot_r)

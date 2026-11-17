@@ -144,9 +144,11 @@ When a leg is in swing with `s ≥ touchdown.hold_from` and its foot has no cont
 
 Without `set_contacts` (`contacts is None`) nothing waits and the reach (section 4.4) stays 0.
 
-### 3.3.1 Limitation: the contact flag is noisy
+### 3.3.1 The contact flag
 
-`Simulation.feet_on_ground` reports whether the foot has any pymunk arbiter (a collision record) at the end of the last substep. A resting foot only reports contact in some frames (measured about 8% of frames while standing). So the hold can wait for the full `hold_max_s` at the end of most swings even when the foot is down.
+`Simulation.feet_on_ground` reports whether the foot has a pymunk contact (a collision record) with the ground. A foot counts as down for `world.contact_hold_s` (0.03 s) after its last contact, which bridges a single physics step where a resting contact drops out.
+
+**Limitation: the stance foot really does lose the ground.** In the configured gait the foot is within 0.5 mm of the ground (and flagged as touching) in only about 60% of mid-stance frames. For the rest it hovers 0.5 to 20 mm above it. The flag follows this accurately, so the touchdown hold (section 3.3) is often waiting for a foot that is genuinely in the air. The cause is the legs: they are position controlled with no give, so the body bobs and the planted foot lifts. Lengthening the stance leg while its foot has no contact (the reach in section 4.4 only works in late swing) would be the way to fix it.
 
 ### 3.4 Balance gate
 
